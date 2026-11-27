@@ -76,7 +76,7 @@ embedding:
   markers: all                  # all | [list]  (uses the feature channels minus exclude)
   exclude: []                   # e.g. [DAPI]
   compartment: cell
-  stat: mean                    # must be in features.stats
+  stat: mean                    # one of features.stats (if not, the first of them is used)
   include_morphology: false     # add nuclear/cell shape features
   batch_key: sample             # Harmony batch column (sample or a samples_table column); null = no Harmony
   n_pcs: 20

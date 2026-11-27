@@ -124,9 +124,18 @@ def load_config(path: str | Path) -> Config:
     for s in cfg["features"]["stats"]:
         if s not in ("median", "mean", "max", "p90", "sd"):
             raise ValueError(f"unknown stat {s}")
-    if cfg["embedding"]["stat"] not in cfg["features"]["stats"]:
-        raise ValueError(f"embedding.stat {cfg['embedding']['stat']} is not in features.stats {cfg['features']['stats']}")
-    missing = [s for s in cfg["report"]["stats"] if s not in cfg["features"]["stats"]]
-    if missing:
-        log.warning("report.stats %s are not in features.stats %s and are left out", missing, cfg["features"]["stats"])
+    # embedding and report can only use extracted statistics. A config from `vollmilch init` lists
+    # every key, so a changed features.stats (e.g. [median]) usually leaves embedding.stat: mean
+    # behind: use the first of features.stats instead and say so, rather than refuse the config.
+    fs = list(cfg["features"]["stats"])
+    if not fs:
+        raise ValueError("features.stats is empty")
+    if cfg["embedding"]["stat"] not in fs:
+        log.warning("embedding.stat %s is not in features.stats %s; using %s", cfg["embedding"]["stat"], fs, fs[0])
+        cfg["embedding"]["stat"] = fs[0]
+    rep = [s for s in cfg["report"]["stats"] if s in fs] or fs[:1]
+    if rep != cfg["report"]["stats"]:
+        log.warning("report.stats %s: only statistics in features.stats %s can be shown; using %s",
+                    cfg["report"]["stats"], fs, rep)
+    cfg["report"]["stats"] = rep
     return cfg

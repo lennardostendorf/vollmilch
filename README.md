@@ -89,7 +89,7 @@ Regions are normalised once (percentiles over the whole region) and segmented in
 
 ## Features (`samples/<sample>/cells.parquet`)
 
-- `<marker>:<compartment>:<stat>`: raw intensity (stats `mean`, the default, `median`, `max`, `p90`, `sd`) in `nucleus`, `cell`, `cytoplasm`. The median ignores bright specks and signal spilling in from neighbours (set it in `features.stats`, `embedding.stat`, `report.stats`). In background-subtracted images (most pixels exactly 0, e.g. MELC), though, a cell's median is 0 unless more than half of its pixels are stained, which loses membrane markers and small stained areas: keep `mean` there.
+- `<marker>:<compartment>:<stat>`: raw intensity (stats `mean`, the default, `median`, `max`, `p90`, `sd`) in `nucleus`, `cell`, `cytoplasm`. The median ignores bright specks and signal spilling in from neighbours: set `features.stats: [median]` (embedding and viewer then use it too). In background-subtracted images (most pixels exactly 0, e.g. MELC), though, a cell's median is 0 unless more than half of its pixels are stained, which loses membrane markers and small stained areas: keep `mean` there.
 - `nucleus:*`: area, perimeter, circularity, eccentricity, solidity, axes, aspect ratio; DAPI integrated intensity, CV, gradient, local SD, bright-chromatin fraction
 - `cell:*`: the same shape features, plus nucleus/cell area ratio
 - `x_px, y_px` (image pixels) and `x_um, y_um`

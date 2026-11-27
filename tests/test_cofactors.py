@@ -202,3 +202,15 @@ def test_to_seurat(synthetic):
         r = subprocess.run(["Rscript", "-e", f'suppressMessages(library(SeuratObject)); o <- readRDS("{out / "seurat.rds"}"); cat(ncol(o), nrow(o), Reductions(o))'],
                            capture_output=True, text=True)
         assert r.stdout.split()[:3] == [str(len(cells)), str(len(feats)), "spatial"], r.stdout + r.stderr
+
+
+def test_config_stats_follow_features(synthetic):
+    """embedding.stat / report.stats not in features.stats fall back to features.stats, with a warning
+    (a config from `vollmilch init` lists embedding.stat: mean even after features.stats is changed)."""
+    cfg = load_config(_config(synthetic, "features: {stats: [median]}\n", out="out_stats1"))
+    assert cfg["embedding"]["stat"] == "median" and cfg["report"]["stats"] == ["median"]
+    cfg = load_config(_config(synthetic, "features: {stats: [median]}\nembedding: {stat: mean}\nreport: {stats: [mean]}\n",
+                              out="out_stats2"))  # what an edited `vollmilch init` config looks like
+    assert cfg["embedding"]["stat"] == "median" and cfg["report"]["stats"] == ["median"]
+    cfg = load_config(_config(synthetic, "features: {stats: [mean, median]}\nreport: {stats: [median, p90]}\n", out="out_stats3"))
+    assert cfg["embedding"]["stat"] == "mean" and cfg["report"]["stats"] == ["median"]
