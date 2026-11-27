@@ -8,22 +8,32 @@ Segmentation, per-cell features and interactive gating for multiplex histology, 
 
 The report is a single HTML file with no server and no internet connection needed, so it can be emailed or put on a shared drive. Gates are kept in the browser and saved as a small JSON file that anyone can load into the same report or apply with `vollmilch export`.
 
+**Status: beta.** Please report problems and suggestions as [GitHub issues](https://github.com/lennardostendorf/vollmilch/issues).
+
 ## Install
 
-Use **Python 3.11 or 3.12**. Newer Python versions often lack prebuilt packages for parts of the stack (h5py, torch, scikit-image), so pip tries to compile them and fails.
-
-With conda/mamba, from this folder:
-
-```bash
-mamba env create -f environment.yml      # Python 3.12 + vollmilch[all], editable
-mamba activate vollmilch
-```
-
-or manually:
+Use **Python 3.11 or 3.12**. Newer Python versions often lack prebuilt packages for parts of the stack (h5py, torch, scikit-image), so pip tries to compile them and fails. Install into a fresh environment, e.g. with conda/mamba:
 
 ```bash
 mamba create -n vollmilch python=3.12 -y && mamba activate vollmilch
-pip install -e ".[all]"                  # or: pip install "vollmilch[all] @ git+https://github.com/lennardostendorf/vollmilch"
+pip install "vollmilch[all] @ git+https://github.com/lennardostendorf/vollmilch"
+vollmilch --version
+```
+
+or as a standalone command with [uv](https://docs.astral.sh/uv/): `uv tool install --python 3.12 "vollmilch[all] @ git+https://github.com/lennardostendorf/vollmilch"`.
+
+To update to the latest version on GitHub (the version number does not change with every fix, so a plain upgrade may report "already satisfied"):
+
+```bash
+pip install --force-reinstall --no-deps "vollmilch @ git+https://github.com/lennardostendorf/vollmilch"
+```
+
+For development, or to run the demo below, clone the repository:
+
+```bash
+git clone https://github.com/lennardostendorf/vollmilch && cd vollmilch
+mamba env create -f environment.yml      # Python 3.12 + vollmilch[all], editable
+mamba activate vollmilch
 ```
 
 Extras: `segment` (Cellpose ≥ 4, i.e. Cellpose-SAM), `embed` (scanpy, harmonypy, leidenalg). Without Cellpose, `segmentation.backend: watershed` gives a classical nuclear segmentation for quick tests. The Cellpose-SAM weights are downloaded by Cellpose on first use. GPU is used automatically (CUDA, or MPS on Apple Silicon).
@@ -43,7 +53,7 @@ vollmilch export config.yaml report_gates.json  # -> vollmilch_out/export/report
 
 `vollmilch run config.yaml` does segment + embed + report in one go.
 
-To try it without data: `python tests/make_synthetic.py data && vollmilch run examples/demo_synthetic.yaml`.
+To try it without data, from a clone of the repository: `python tests/make_synthetic.py data && vollmilch run examples/demo_synthetic.yaml` (synthetic slide with two biopsies; the report ends up in `demo_out/report.html`).
 
 ## Inputs
 

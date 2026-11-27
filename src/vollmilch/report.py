@@ -183,11 +183,10 @@ def build_report(cfg, out_path: Path | None = None, gates_path=None, title=None)
             log.info("report: %d thumbnails (%d channels, %d px)", len(sel), C, size)
 
     smeta = []
-    for s in samples:
+    for s in samples:  # no file paths: the report gets shared and they would show user and folder names
         m = sample_meta(cfg, s)
         smeta.append({"sample": s, "image": m["image"], "region": m["name"], "n_total": int((df["sample"] == s).sum()),
-                      "n_shown": int((d["sample"] == s).sum()), "image_path": m.get("image_path"),
-                      "pixel_size_um": m["pixel_size_um"]})
+                      "n_shown": int((d["sample"] == s).sum()), "pixel_size_um": m["pixel_size_um"]})
     emb_meta = []
     for name in embs:
         p = cfg.out / "embeddings" / f"{name}.json"
