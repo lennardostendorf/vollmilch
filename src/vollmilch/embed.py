@@ -38,7 +38,8 @@ def embedding_markers(df, cfg, markers=None):
     cols = [f"{m}:{comp}:{stat}" for m in ms]
     miss = [c for c in cols if c not in df.columns]
     if miss:
-        raise KeyError(f"embedding features not in the cell table: {miss}")
+        raise KeyError(f"embedding features not in the cell table: {miss}. If the samples were segmented with other "
+                       "features.stats, run `vollmilch segment --reuse-segmentation` (keeps the masks)")
     return ms, cols
 
 

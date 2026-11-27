@@ -81,6 +81,9 @@ def viewer_features(df: pd.DataFrame, cfg, embeddings: dict | None = None):
                 desc.append({"key": key, "label": f"UMAP {k} ({name}, {lab})", "group": "Embedding", "embedding": name, "variant": lab, "dim": k})
             lc = e[f"leiden{v}"]
             cats[f"leiden {name}{'' if not v else ' harmony'}"] = np.where(lc.isna(), "NA", lc.fillna(-1).astype(int).astype(str))
+    if markers and not any(d.get("marker") for d in desc):
+        log.warning("no marker columns for report.stats %s in the cell table; if the samples were segmented with other "
+                    "features.stats, run `vollmilch segment --reuse-segmentation`", rc.get("stats"))
     return pd.DataFrame(cols), desc, cats
 
 

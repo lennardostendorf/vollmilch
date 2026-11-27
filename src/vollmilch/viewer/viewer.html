@@ -539,7 +539,7 @@ function renderThumb(t, ctx) {
 }
 const tmpC = document.createElement("canvas");
 const hoverTmp = document.createElement("canvas");
-function markerKey(ch) { for (const k of [`${ch}:cell:mean`, `${ch}:nucleus:mean`]) if (cols[k]) return k; const c = M.columns.find(c => c.marker === ch); return c ? c.key : null; }
+function markerKey(ch) { for (const st of ["mean", "median"]) for (const k of [`${ch}:cell:${st}`, `${ch}:nucleus:${st}`]) if (cols[k]) return k; const c = M.columns.find(c => c.marker === ch); return c ? c.key : null; }
 function renderHover(i) {
   if (i === undefined) i = S.panel; if (i < 0) return; S.panel = i;
   const cv = $("hoverCv"), ctx = cv.getContext("2d"); ctx.fillStyle = "#14171d"; ctx.fillRect(0, 0, cv.width, cv.height);
@@ -552,7 +552,7 @@ function renderHover(i) {
   h += `<div class="small">${esc(colInfo[S.x] ? colInfo[S.x].label : S.x)}: ${fmt(cols[S.x] ? cols[S.x][i] : NaN)}<br>${esc(colInfo[S.y] ? colInfo[S.y].label : S.y)}: ${fmt(cols[S.y] ? cols[S.y][i] : NaN)}<br>pixel ${Math.round(xu / pxs)}, ${Math.round(yu / pxs)}</div>`;
   if (M.thumbs) {
     const rows = chanState.map(c => { const key = markerKey(c.name); return key ? `<tr><td><span class="sw" style="background:${c.on ? c.color : "transparent"}"></span> ${esc(c.name)}</td><td>${fmt(cols[key][i])}</td></tr>` : ""; }).join("");
-    if (rows) h += `<table title="asinh-transformed mean intensity (cell, or nucleus in nuclei mode)">${rows}</table>`;
+    if (rows) h += `<table title="asinh-transformed intensity (cell mean, else median; nucleus in nuclei mode)">${rows}</table>`;
   }
   $("hoverInfo").innerHTML = h;
 }

@@ -122,6 +122,11 @@ def load_config(path: str | Path) -> Config:
         if c not in ("nucleus", "cell", "cytoplasm"):
             raise ValueError(f"unknown compartment {c}")
     for s in cfg["features"]["stats"]:
-        if s not in ("mean", "max", "p90", "sd"):
+        if s not in ("median", "mean", "max", "p90", "sd"):
             raise ValueError(f"unknown stat {s}")
+    if cfg["embedding"]["stat"] not in cfg["features"]["stats"]:
+        raise ValueError(f"embedding.stat {cfg['embedding']['stat']} is not in features.stats {cfg['features']['stats']}")
+    missing = [s for s in cfg["report"]["stats"] if s not in cfg["features"]["stats"]]
+    if missing:
+        log.warning("report.stats %s are not in features.stats %s and are left out", missing, cfg["features"]["stats"])
     return cfg

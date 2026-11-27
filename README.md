@@ -51,7 +51,7 @@ vollmilch report config.yaml                    # -> vollmilch_out/report.html
 vollmilch export config.yaml report_gates.json  # -> vollmilch_out/export/report_gates/
 ```
 
-`vollmilch run config.yaml` does segment + embed + report in one go.
+`vollmilch run config.yaml` does segment + embed + report in one go. `vollmilch to_seurat config.yaml` exports the cells to Seurat (see below).
 
 To try it without data, from a clone of the repository: `python tests/make_synthetic.py data && vollmilch run examples/demo_synthetic.yaml` (synthetic slide with two biopsies; the report ends up in `demo_out/report.html`).
 
@@ -88,7 +88,7 @@ Regions are normalised once (percentiles over the whole region) and segmented in
 
 ## Features (`samples/<sample>/cells.parquet`)
 
-- `<marker>:<compartment>:<stat>`: raw intensity (stats `mean`, `max`, `p90`, `sd`) in `nucleus`, `cell`, `cytoplasm`
+- `<marker>:<compartment>:<stat>`: raw intensity (stats `mean`, the default, `median`, `max`, `p90`, `sd`) in `nucleus`, `cell`, `cytoplasm`. The median ignores bright specks and signal spilling in from neighbours (set it in `features.stats`, `embedding.stat`, `report.stats`). In background-subtracted images (most pixels exactly 0, e.g. MELC), though, a cell's median is 0 unless more than half of its pixels are stained, which loses membrane markers and small stained areas: keep `mean` there.
 - `nucleus:*`: area, perimeter, circularity, eccentricity, solidity, axes, aspect ratio; DAPI integrated intensity, CV, gradient, local SD, bright-chromatin fraction
 - `cell:*`: the same shape features, plus nucleus/cell area ratio
 - `x_px, y_px` (image pixels) and `x_um, y_um`
@@ -148,6 +148,19 @@ Each sample is capped at `report.max_cells_per_sample` cells (random subset, cel
 
 Population assignment in the export uses the same arithmetic as the viewer. On the test data both agree cell by cell. To re-classify cells already in QuPath after changing gates, run `qupath/import_classes.groovy` with the new `classes.csv`.
 
+## To Seurat
+
+```bash
+vollmilch to_seurat config.yaml --gates gates.json   # -> vollmilch_out/seurat/seurat.rds
+```
+
+writes a [Seurat](https://satijalab.org/seurat/) object if R with Seurat (v5) is installed, otherwise the files to build one (`Rscript make_seurat.R` in that folder, or `Read10X()` by hand):
+- assay `Protein` (`--assay`): `counts` = raw per-cell intensities, `data` = `asinh(intensity / cofactor)` with vollmilch's cofactors. Values: `embedding.compartment` and `embedding.stat`, or `--compartment` / `--stat`.
+- metadata: sample, samples_table columns, x/y in px and µm, morphology (`nucleus_area_um2`, …), Leiden clusters, and with `--gates` the deepest `population`, its `population_path` and one `gate_<name>` column per gate. Identities: populations, else the last Leiden clustering, else the sample.
+- reductions: every UMAP (`umap_all`, `umap_all_harmony`, …; cells outside a subsampled embedding are `NA`) and `spatial` (x and −y in µm, so `DimPlot(obj, reduction = "spatial")` shows the tissue as in the image).
+
+The matrix files are a 10x folder (`matrix.mtx.gz`, `features.tsv.gz`, `barcodes.tsv.gz`), plus `asinh.mtx.gz`, `metadata.csv.gz` and `reduction_*.csv.gz`. Zeros are not stored, so background-subtracted data stays small.
+
 ## Output layout
 
 ```
@@ -159,13 +172,14 @@ vollmilch_out/
   images/<image>.ome.tif        (PNG sources)
   report.html
   export/<gates>/  <image>_cells.geojson  classes.csv  population_counts.csv
+  seurat/  seurat.rds  make_seurat.R  matrix.mtx.gz  features.tsv.gz  barcodes.tsv.gz  asinh.mtx.gz  ...
   vollmilch.log
 ```
 
 ## Practical notes
 
 - **Report size** is mostly thumbnails (JPEG atlases, roughly 0.5–1 kB per cell and channel). Tune `thumbnails.max_per_sample`, `thumbnails.size_um` and `report.max_thumbnails_total`. After changing thumbnail channels, run `vollmilch segment --reuse-segmentation` (keeps the masks).
-- **Memory**: a region is held as two label images plus one channel; all reductions stream over row blocks. Measured: a 6,000 × 10,400 px region with 80k cells and 8 channels peaked at 1.4 GB and took 30 s for features with the defaults (`mean`; nucleus + cell). The `max`/`p90` statistics and the cytoplasm compartment raised this to 2.5 GB and 95 s. A 20k × 20k px biopsy needs roughly 5–7 GB with the defaults.
+- **Memory**: a region is held as two label images plus one channel; sums stream over row blocks, and the order statistics (`median`, `max`, `p90`) sort each channel's pixels per cell once. Measured on a synthetic 6,000 × 10,400 px region with 80k cells and 8 channels (nucleus + cell): `mean` (default) 12 s and 1.7 GB peak, `median` 18 s and 2.2 GB; all four statistics on nucleus, cell and cytoplasm 25 s and 2.7 GB. Time and memory grow about in proportion to the region's pixels: a 20k × 20k px biopsy has 6.4 times as many.
 - **Cellpose-SAM** needs no diameter; set `diameter_um` only if objects come out systematically too small or too large. For `cells` mode, choose membrane/cytoplasm markers that outline most cells (Na/K-ATPase, CD45, HLA class I, pan-cytokeratin).
 - Runs are reproducible (`embedding.seed`; random subsets are seeded per sample).
 

@@ -58,7 +58,7 @@ features:
   channels: all                 # all | [list of markers]
   exclude: []                   # e.g. [Blank, Empty, Autofluorescence]
   compartments: [nucleus, cell, cytoplasm] # any of nucleus, cell, cytoplasm (cytoplasm = cell minus nucleus)
-  stats: [mean, p90]            # any of mean, max, p90, sd
+  stats: [mean, median, p90]    # any of mean, median, max, p90, sd
   nuclear_texture: true         # DAPI texture/heterogeneity per nucleus
 
 # Display transform for markers: asinh(value / cofactor). `vollmilch cofactors` suggests
@@ -94,4 +94,4 @@ report:
   title: null
   max_cells_per_sample: 150000  # cells plotted in the viewer (gating export applies to all cells)
   compartments: [cell, nucleus] # marker compartments offered in the viewer
-  stats: [mean]
+  stats: [mean, median]

@@ -169,3 +169,36 @@ def test_auto_uses_cells_once_segmented(synthetic):
     assert m["level"] == "cells"
     for x in m["markers"][1:]:  # cell means: background ~100 with a small SD (DAPI: every cell is positive)
         assert 95 <= x["suggested"] <= 130 and {p["method"] for p in x["per_sample"]} == {"background"}, x
+
+
+def test_to_seurat(synthetic):
+    """Matrix files readable as 10x data; with R + Seurat installed also a loadable seurat.rds."""
+    import gzip
+    import subprocess
+
+    import pandas as pd
+    from scipy import io
+
+    from vollmilch.pipeline import run_segmentation
+    from vollmilch.seurat import seurat_available, to_seurat
+
+    cfg = load_config(_config(synthetic, out="out_seurat"))
+    run_segmentation(cfg)
+    rds = seurat_available()
+    out = to_seurat(cfg, rds=rds)
+    with gzip.open(out / "matrix.mtx.gz") as fh:
+        counts = io.mmread(fh).toarray()
+    with gzip.open(out / "asinh.mtx.gz") as fh:
+        data = io.mmread(fh).toarray()
+    feats = pd.read_csv(out / "features.tsv.gz", sep="\t", header=None)[0].tolist()
+    cells = pd.read_csv(out / "barcodes.tsv.gz", header=None)[0].tolist()
+    meta = pd.read_csv(out / "metadata.csv.gz", index_col=0)
+    assert feats == ms.CHANNELS and counts.shape == (len(feats), len(cells)) and list(meta.index) == cells
+    df = pd.concat([pd.read_parquet(cfg.sample_dir(s) / "cells.parquet") for s in ("Biopsy_A", "Biopsy_B")])
+    assert np.allclose(counts[feats.index("CD3")], df["CD3:cell:mean"], rtol=1e-5)
+    assert np.allclose(data, np.arcsinh(counts / 5), rtol=1e-4, atol=1e-6)  # default cofactor 5
+    assert "nucleus_area_um2" in meta.columns and not any(":" in c for c in meta.columns)
+    if rds:
+        r = subprocess.run(["Rscript", "-e", f'suppressMessages(library(SeuratObject)); o <- readRDS("{out / "seurat.rds"}"); cat(ncol(o), nrow(o), Reductions(o))'],
+                           capture_output=True, text=True)
+        assert r.stdout.split()[:3] == [str(len(cells)), str(len(feats)), "spatial"], r.stdout + r.stderr

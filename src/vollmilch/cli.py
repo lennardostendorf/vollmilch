@@ -145,6 +145,16 @@ def cmd_export(a):
     print(d)
 
 
+def cmd_to_seurat(a):
+    from .pipeline import setup_logging
+    from .seurat import to_seurat
+
+    cfg = _cfg(a.config)
+    setup_logging(cfg.out, a.verbose)
+    print(to_seurat(cfg, out_dir=a.output, gates_path=a.gates, compartment=a.compartment, stat=a.stat,
+                    assay=a.assay, samples=a.samples.split(",") if a.samples else None, rds=not a.no_rds))
+
+
 def cmd_run(a):
     from .embed import run_embedding
     from .pipeline import load_cells, run_segmentation, setup_logging
@@ -213,6 +223,15 @@ def main(argv=None):
     s.add_argument("--full-path", action="store_true", help="QuPath class = 'Parent: Child' (derived classes)")
     s.add_argument("--no-geometry", action="store_true", help="only the CSV tables")
     s.add_argument("-o", "--output", help="output folder (default: <output>/export/<gates name>)")
+
+    s = add("to_seurat", cmd_to_seurat, "Seurat object (seurat.rds, if R with Seurat is installed) or the matrix files to build one")
+    s.add_argument("--gates", help="gates JSON: adds population, population_path and gate_<name> to the metadata")
+    s.add_argument("--compartment", help="default: embedding.compartment")
+    s.add_argument("--stat", help="default: embedding.stat (must be in features.stats)")
+    s.add_argument("--assay", default="Protein", help="Seurat assay name")
+    s.add_argument("--samples")
+    s.add_argument("--no-rds", action="store_true", help="only write the files, do not run R")
+    s.add_argument("-o", "--output", help="output folder (default: <output>/seurat)")
 
     s = add("run", cmd_run, "segment + embed + report")
     s.add_argument("--force", action="store_true")

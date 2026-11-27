@@ -90,3 +90,22 @@ def test_gate_hierarchy():
     assert member["p"].tolist() == [False, True, True, True]
     assert member["c"].tolist() == [False, False, True, True]
     assert best.tolist() == [-1, 0, 1, 1]
+
+
+@pytest.mark.parametrize("dtype", [np.uint16, np.uint8, np.float32])
+def test_order_stats_match_numpy(dtype):
+    from vollmilch.features import SortedIndex
+
+    rng = np.random.default_rng(4)
+    lab = rng.integers(0, 40, (120, 130)).astype(np.uint32)
+    lab[lab == 7] = 0  # an id without pixels: NaN
+    img = (rng.random(lab.shape) * 60000 if dtype != np.uint8 else rng.integers(0, 255, lab.shape)).astype(dtype)
+    got = SortedIndex(lab, 39).order_stats(img.ravel(), ["median", "p90", "max"])
+    for oid in range(1, 40):
+        v = np.sort(img[lab == oid].astype(np.float64))
+        if not v.size:
+            assert all(np.isnan(got[s][oid - 1]) for s in got)
+            continue
+        assert got["median"][oid - 1] == np.median(v)
+        assert got["max"][oid - 1] == v[-1]
+        assert got["p90"][oid - 1] == v[int(np.floor(0.9 * (v.size - 1)))]

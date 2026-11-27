@@ -58,7 +58,9 @@ features:
   channels: all                 # all | [list of markers]
   exclude: []                   # e.g. [Blank, Empty, Autofluorescence]
   compartments: [nucleus, cell] # any of nucleus, cell, cytoplasm (cytoplasm = cell minus nucleus)
-  stats: [mean]                 # any of mean, max, p90, sd
+  stats: [mean]                 # any of mean, median, max, p90, sd. median ignores bright specks and spill-over,
+                                # but is 0 in background-subtracted images (e.g. MELC) unless over half of a
+                                # cell's pixels are stained: keep mean there
   nuclear_texture: true         # DAPI texture/heterogeneity per nucleus
 
 # Display transform for markers: asinh(value / cofactor). `vollmilch cofactors` suggests
@@ -73,7 +75,7 @@ embedding:
   markers: all                  # all | [list]  (uses the feature channels minus exclude)
   exclude: []                   # e.g. [DAPI]
   compartment: cell
-  stat: mean
+  stat: mean                    # must be in features.stats
   include_morphology: false     # add nuclear/cell shape features
   batch_key: sample             # Harmony batch column (sample or a samples_table column); null = no Harmony
   n_pcs: 20

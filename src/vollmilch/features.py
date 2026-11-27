@@ -3,7 +3,8 @@ and multichannel thumbnails.
 
 Memory: label images stay in memory; channels are read one at a time and all reductions
 stream over blocks of rows, so peak memory is roughly labels + one channel + one block.
-Only the `max` and `p90` statistics need a sorted pixel index per compartment (more memory)."""
+The order statistics (`median`, `max`, `p90`) need a sorted pixel index per
+compartment: more memory and time than `mean` and `sd`."""
 from __future__ import annotations
 
 import logging
@@ -15,6 +16,8 @@ from scipy import ndimage as ndi
 log = logging.getLogger("vollmilch")
 
 BLOCK = 1024
+STATS = ("median", "mean", "max", "p90", "sd")
+ORDER_STATS = ("median", "max", "p90")  # need the pixels of each object sorted
 
 
 def _blocks(H, block=BLOCK):
@@ -115,7 +118,8 @@ def _morph(lab: np.ndarray, n: int, px: float, prefix: str) -> pd.DataFrame:
 
 
 class SortedIndex:
-    """Pixel index sorted by object; only built when max/p90 are requested."""
+    """Pixel index sorted by object; only built when an order statistic (median, p90, max) is
+    requested."""
 
     def __init__(self, lab: np.ndarray, n: int):
         flat = lab.ravel()
@@ -132,22 +136,33 @@ class SortedIndex:
         self.starts = np.r_[0, np.cumsum(self.count[1:])][:-1]
         self.present = self.count[1:] > 0
 
-    def max(self, flat_img):
+    def _sorted(self, flat_img) -> np.ndarray:
+        """Pixel values sorted within each object (objects in id order)."""
         v = flat_img[self.pos]
-        out = np.full(self.n, np.nan)
-        st = self.starts[self.present]
-        if st.size:
-            out[self.present] = np.maximum.reduceat(v, st)
-        return out
+        if v.dtype.kind in "ub" and v.dtype.itemsize <= 4:
+            # one sort of (id, value) packed into 64 bits: much faster than a two-key sort
+            key = (self.ids.astype(np.int64) << 32) | v.astype(np.int64)
+            key.sort()
+            return key & 0xFFFFFFFF
+        return v[np.lexsort((v, self.ids))]
 
-    def quantile(self, flat_img, q):
-        v = flat_img[self.pos]
-        o = np.lexsort((v, self.ids))
-        vs = v[o]
-        del o, v
-        out = np.full(self.n, np.nan)
-        idx = self.starts + np.floor(q * (self.count[1:] - 1)).astype(np.int64)
-        out[self.present] = vs[idx[self.present]]
+    def order_stats(self, flat_img, stats) -> dict:
+        """{stat: per-object values} for max, p90 (nearest rank below) and median (mean of the
+        two middle values for an even count), all from one sort; NaN for empty objects."""
+        vs = self._sorted(flat_img)
+        ok = self.present
+        st, cnt = self.starts[ok], self.count[1:][ok]
+        out = {}
+        for name in stats:
+            r = np.full(self.n, np.nan)
+            if st.size:
+                if name == "max":
+                    r[ok] = vs[st + cnt - 1]
+                elif name == "p90":
+                    r[ok] = vs[st + np.floor(0.9 * (cnt - 1)).astype(np.int64)]
+                elif name == "median":
+                    r[ok] = (vs[st + (cnt - 1) // 2].astype(np.float64) + vs[st + cnt // 2]) / 2
+            out[name] = r
         return out
 
 
@@ -198,6 +213,7 @@ def extract_features(source, region, nuc, cell, cfg, rng=None):
     if mode == "nuclei":
         comps = ["nucleus"] if any(c in comps for c in ("nucleus", "cell")) else []
     stats = list(fc["stats"])
+    order = [st for st in stats if st in ORDER_STATS]
 
     def comp_block(name, a, b):
         if name == "nucleus":
@@ -228,7 +244,7 @@ def extract_features(source, region, nuc, cell, cfg, rng=None):
         for c in comps:
             counts[c] += _bc(comp_block(c, a, b).ravel(), n)
     sorted_idx = {}
-    if any(s in ("max", "p90") for s in stats):
+    if order:
         for c in comps:
             lab = comp_block(c, 0, H) if c == "cytoplasm" else (nuc if c == "nucleus" else cell)
             sorted_idx[c] = SortedIndex(lab, n)
@@ -285,15 +301,14 @@ def extract_features(source, region, nuc, cell, cfg, rng=None):
             if ch in chans:
                 for c in comps:
                     m = sums[c] / counts[c]
+                    os_ = sorted_idx[c].order_stats(img.ravel(), order) if order else {}
                     for st in stats:
                         if st == "mean":
                             r = m[1:]
                         elif st == "sd":
                             r = np.sqrt(np.clip(sq[c] / counts[c] - m * m, 0, None))[1:]
-                        elif st == "max":
-                            r = sorted_idx[c].max(img.ravel())
                         else:
-                            r = sorted_idx[c].quantile(img.ravel(), 0.9)
+                            r = os_[st]
                         newcols[f"{ch}:{c}:{st}"] = r
             if tex is not None:
                 ncnt = counts["nucleus"] if "nucleus" in comps else _bc(nuc.ravel(), n)
