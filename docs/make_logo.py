@@ -21,6 +21,7 @@ PAL = {
     "w": "#fbf9f2",  # drop
     "W": "#d3cbb3",  # drop shade
     "x": "#c8d3df",  # table shadow
+    "_": "#ffffff",  # banner background (so it also reads on dark pages)
 }
 N = 32
 TOP, BOT, MILK = 6, 28, 12   # glass rows (outline included), milk surface row
@@ -90,7 +91,7 @@ def to_img(grid, scale):
 
 def to_svg(grid, title):
     H, W = grid.shape
-    rects = []
+    rects = [f'<rect width="{W}" height="{H}" fill="{PAL["_"]}"/>'] if (grid == "_").any() else []
     for y in range(H):
         x = 0
         while x < W:  # merge horizontal runs of one colour
@@ -98,7 +99,7 @@ def to_svg(grid, title):
             x2 = x
             while x2 + 1 < W and grid[y, x2 + 1] == c:
                 x2 += 1
-            if PAL[c]:
+            if PAL[c] and c != "_":
                 rects.append(f'<rect x="{x}" y="{y}" width="{x2 - x + 1}" height="1" fill="{PAL[c]}"/>')
             x = x2 + 1
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" shape-rendering="crispEdges">'
@@ -127,14 +128,16 @@ def wordmark(text, color="o"):
     return np.array(cols[:-1], dtype="<U1").T
 
 
-def banner():
+def banner(pad=3):
+    """Glass + wordmark on white with a margin of `pad` pixels."""
     big = np.repeat(np.repeat(wordmark("VOLLMILCH"), 2, 0), 2, 1)  # wordmark at 2x pixel size
     W = N + 3 + big.shape[1] + 1
     b = np.full((N, W), ".", dtype="<U1")
     b[:, :N] = g
     y0 = (N - big.shape[0]) // 2 + 2
     b[y0:y0 + big.shape[0], N + 3:N + 3 + big.shape[1]] = big
-    return b
+    b[b == "."] = "_"
+    return np.pad(b, pad, constant_values="_")
 
 
 if __name__ == "__main__":
