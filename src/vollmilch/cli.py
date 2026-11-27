@@ -17,24 +17,48 @@ def _cfg(path):
     return load_config(path)
 
 
+PX_LINE = "  # pixel_size_um: 0.5          # required for png_folder; overrides file metadata otherwise\n"
+MELC_PIXEL_SIZE_UM = 0.325
+
+
+def _sub(txt: str, old: str, new: str) -> str:
+    """Replace one template line; fail loudly if the template changed, rather than write a
+    half-edited config."""
+    if old not in txt:
+        raise RuntimeError(f"config template has no {old.strip()!r}; update cmd_init")
+    return txt.replace(old, new, 1)
+
+
 def cmd_init(a):
     from .config import template_text
 
     out = Path(a.output)
     if out.exists() and not a.force:
         sys.exit(f"{out} exists (use --force to overwrite)")
+    kind = a.type or ("png_folder" if a.melc else "qptiff")
     txt = template_text()
-    if a.type == "png_folder":
-        txt = (txt.replace("type: qptiff ", "type: png_folder")
-                  .replace("path: data/slide.qptiff       # <- your image",
-                           "path: data                    # folder of <marker>.png, or a folder of such folders")
-                  .replace("# pixel_size_um: 0.5 ", "pixel_size_um: 0.5   ")
-                  .replace("type: geojson                 # geojson", "type: none                    # geojson"))
-    elif a.type == "ome_tiff":
-        txt = (txt.replace("type: qptiff ", "type: ome_tiff")
-                  .replace("path: data/slide.qptiff       # <- your image", "path: data/image.ome.tif      # <- your image, or a folder of .ome.tif files"))
+    px_line = PX_LINE
+    if kind == "png_folder":
+        px_line = "  pixel_size_um: 0.5            # required for png_folder; overrides file metadata otherwise\n"
+        txt = _sub(txt, "type: qptiff ", "type: png_folder")
+        txt = _sub(txt, "path: data/slide.qptiff       # <- your image",
+                   "path: data                    # folder of <marker>.png, or a folder of such folders")
+        txt = _sub(txt, PX_LINE, px_line)
+        txt = _sub(txt, "type: geojson                 # geojson", "type: none                    # geojson")
+    elif kind == "ome_tiff":
+        txt = _sub(txt, "type: qptiff ", "type: ome_tiff")
+        txt = _sub(txt, "path: data/slide.qptiff       # <- your image",
+                   "path: data/image.ome.tif      # <- your image, or a folder of .ome.tif files")
+    if a.melc:  # MELC preset: known pixel size, markers measured over the whole cell
+        txt = _sub(txt, "# vollmilch configuration\n", "# vollmilch configuration (MELC preset: vollmilch init --melc)\n")
+        txt = _sub(txt, px_line, f"  pixel_size_um: {MELC_PIXEL_SIZE_UM}          # MELC; overrides file metadata\n")
+        txt = _sub(txt, "  compartments: [nucleus, cell] # any of",
+                   "  compartments: [cell]          # MELC preset; any of")
+        txt = _sub(txt, "  compartments: [cell, nucleus] # marker compartments offered in the viewer",
+                   "  compartments: [cell]          # marker compartments offered in the viewer")
     out.write_text(txt, encoding="utf-8")
-    print(f"wrote {out}: set the image (source.path), the nuclear channel and the regions in it, then run: "
+    preset = f" (MELC preset: {kind}, {MELC_PIXEL_SIZE_UM} µm/px, cell compartment)" if a.melc else ""
+    print(f"wrote {out}{preset}: set the image (source.path), the nuclear channel and the regions in it, then run: "
           f"vollmilch inspect {out}")
 
 
@@ -186,7 +210,10 @@ def main(argv=None):
 
     s = add("init", cmd_init, "write a commented config template", config=False)
     s.add_argument("-o", "--output", default="config.yaml")
-    s.add_argument("--type", choices=["qptiff", "png_folder", "ome_tiff"], default="qptiff")
+    s.add_argument("--type", choices=["qptiff", "png_folder", "ome_tiff"],
+                   help="image source (default: qptiff, or png_folder with --melc)")
+    s.add_argument("--melc", action="store_true",
+                   help=f"MELC preset: png_folder (unless --type), {MELC_PIXEL_SIZE_UM} µm/px, markers measured in the cell compartment")
     s.add_argument("--force", action="store_true")
 
     s = add("inspect", cmd_inspect, "show channels, pixel size and samples; check the config")

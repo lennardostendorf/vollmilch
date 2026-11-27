@@ -35,9 +35,11 @@ my_project/
 
 `vollmilch init` writes `config.yaml`, a commented settings file that already points to `data/`. Open it and set at least the image (`source.path`), the nuclear channel (`segmentation.nuclear_channel`) and the regions to analyse (`regions`: QuPath outlines, a mask, or whole images). Relative paths in it count from the config file. `vollmilch inspect` then checks that the images, channels and regions are found, before anything long runs.
 
+**MELC data:** `vollmilch init --melc` presets PNG folders (one PNG per marker, file name = marker name; put each field of view in its own folder, `data/<fov>/<marker>.png`), 0.325 µm/px, and markers measured over the whole cell. Use `vollmilch init --melc --type ome_tiff` for OME-TIFF exports.
+
 ```bash
 cd my_project
-vollmilch init --type qptiff -o config.yaml     # or --type ome_tiff / png_folder; then edit config.yaml
+vollmilch init --type qptiff -o config.yaml     # or --type ome_tiff / png_folder, or --melc; then edit config.yaml
 vollmilch inspect config.yaml                   # channels, pixel size, samples; checks channel names
 vollmilch segment config.yaml                   # resumable; --samples A,B  --force  --reuse-segmentation
 vollmilch cofactors config.yaml                 # optional: tune asinh cofactors -> vollmilch_out/cofactors/cofactors.html
