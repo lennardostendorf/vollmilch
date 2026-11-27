@@ -10,12 +10,10 @@ cells do not reach. On standard data this gives the usual values (about 5 for Cy
 
 Background-subtracted images (background thresholded to exactly 0, e.g. the standard MELC
 preprocessing) have no background noise left to measure. They are recognised by a pile-up of exact
-zeros: most pixels, or cells whose every pixel is 0, which noise never produces. Their negative
-cells are the cells at 0 plus cells with a few stray positive pixels, and on a log scale the
-stray-signal cells and the positive cells form two humps. The cofactor is put at the split between
-them (Otsu threshold of log10 of the non-zero cell means): the same principle, the upper edge of
-the negative cells. Pixels cannot show this split (a cell mean mixes zeros and signal), so such
-markers get a suggestion only from cells.
+zeros: most pixels, or cells whose every pixel is 0, which noise never produces. If that holds for
+most markers, the image is treated as background-subtracted and every marker gets
+  p1-cells   (default) the 1st percentile of the positive (> 0) cell values, or
+  p1-pixels  the 1st percentile of the positive pixel values (also before segmentation).
 """
 from __future__ import annotations
 
@@ -43,8 +41,8 @@ REMOVED = {"pixels": 0.6, "cells": 0.002}  # share piled up at the minimum that 
 N_FINE = 2048   # histogram bins per sample and marker stored in the viewer
 SMOOTH = 1.5    # histogram smoothing (bins) for the peak search
 HWHM_PER_SD = np.sqrt(2 * np.log(2))
-SPLIT_MIN_ETA = 0.66  # Otsu separation below this: one hump, no clear split (a single Gaussian gives 0.64)
-SPLIT_MIN_N = 20      # non-zero cells needed for a split
+SUBTRACTED_RULES = ("p1-cells", "p1-pixels")  # cofactor rules for background-subtracted markers
+P1_MIN_N = 20         # positive values needed for a 1st percentile
 
 
 def sig2(x: float) -> float:
@@ -140,43 +138,26 @@ def background(v: np.ndarray):
     return float(m), float(s)
 
 
-def split(v: np.ndarray):
-    """Split between stray-signal and positive cells: Otsu threshold of log10 of the values above
-    the zero pile-up. Returns (split, eta), eta = between-class / total variance (how cleanly
-    the two humps separate), or (nan, nan) with too few values."""
-    from skimage.filters import threshold_otsu
-
-    lv = np.log10(v[v > max(float(v.min()), 0.0)])
-    if lv.size < SPLIT_MIN_N or np.ptp(lv) == 0:
-        return np.nan, np.nan
-    t = threshold_otsu(lv)
-    a, b = lv[lv <= t], lv[lv > t]
-    eta = a.size * b.size / lv.size**2 * (a.mean() - b.mean()) ** 2 / lv.var()
-    return float(10**t), float(eta)
+def p1_positive(v: np.ndarray) -> float:
+    """1st percentile of the positive (> 0) values; NaN with fewer than P1_MIN_N of them."""
+    pos = v[v > 0]
+    return float(np.percentile(pos, 1)) if pos.size >= P1_MIN_N else np.nan
 
 
 def suggest(v: np.ndarray, level: str = "pixels") -> dict:
-    """Suggested cofactor and how it was found (method):
-      background  background mode + 3 SD. frac_below is the fraction of values clearly below the
-                  peak (< mode - 3 SD): background is the lowest population, so a large value means
-                  the main peak is something else (e.g. a marker present on most cells).
-      split       background removed (zero_frac, the share piled up at 0, >= REMOVED[level]), cells:
-                  split between stray-signal and positive cells; split_eta < SPLIT_MIN_ETA means
-                  there is no clear second hump.
-      none        background removed in pixels, or too few values."""
+    """Suggested cofactor from the background: mode + 3 SD (method "background"). frac_below is
+    the fraction of values clearly below the peak (< mode - 3 SD): background is the lowest
+    population, so a large value means the main peak is something else (e.g. a marker present on
+    most cells). zero_frac is the share piled up at the minimum; at REMOVED[level] or more the
+    background was removed: no estimate here (method "none"), run_cofactors applies a p1 rule."""
     v = np.asarray(v, np.float64)
     v = v[np.isfinite(v)]
     zero_frac = pileup(v) if v.size else 0.0
     removed = zero_frac >= REMOVED[level]
-    out = {"cofactor": np.nan, "method": "none", "background": np.nan, "noise_sd": np.nan, "split_eta": np.nan,
+    out = {"cofactor": np.nan, "method": "none", "background": np.nan, "noise_sd": np.nan,
            "frac_above": np.nan, "frac_below": np.nan, "zero_frac": float(zero_frac),
            "background_removed": bool(removed), "n_values": int(v.size)}
     if removed:
-        if level == "cells":
-            c, eta = split(v)
-            if np.isfinite(c):
-                c = sig2(c)
-                out.update(cofactor=c, method="split", split_eta=eta, frac_above=float(np.mean(v > c)))
         return out
     mode, sd = background(v)
     if not np.isfinite(mode):
@@ -248,11 +229,13 @@ def _hist(v: np.ndarray, c0: float):
 
 
 # ---------------------------------------------------------------------------- command
-def run_cofactors(cfg, level="auto", samples=None, max_pixels=2_000_000, out_path=None) -> Path:
+def run_cofactors(cfg, level="auto", samples=None, max_pixels=2_000_000, out_path=None, subtracted="p1-cells") -> Path:
     from .pipeline import completed_samples, load_cells, sample_seed
     from .regions import get_regions
     from .sources import open_source
 
+    if subtracted not in SUBTRACTED_RULES:
+        raise ValueError(f"subtracted must be one of {SUBTRACTED_RULES}")
     t0 = time.time()
     source = open_source(cfg)
     markers = marker_channels(cfg, source)
@@ -278,6 +261,10 @@ def run_cofactors(cfg, level="auto", samples=None, max_pixels=2_000_000, out_pat
     if not names:
         raise ValueError("no samples" + ("" if level == "pixels" else "; run `vollmilch segment` first or use --from pixels"))
     log.info("cofactors from %s: %d samples, %d markers", level, len(names), len(markers))
+    read_px = level == "pixels" or subtracted == "p1-pixels"
+    if read_px and regions is None:
+        by_sample = {r.sample: r for r in get_regions(cfg, source)}
+        regions = [by_sample[s] for s in names]
 
     S, Mk = len(names), len(markers)
     stats = [[None] * S for _ in range(Mk)]
@@ -285,35 +272,51 @@ def run_cofactors(cfg, level="auto", samples=None, max_pixels=2_000_000, out_pat
     grids = np.full((Mk, S, 3), np.nan)          # c0, u0, u1
     ranges = np.full((Mk, S, 2), np.nan)         # 0.1 and 99.9 percentile
     for si, s in enumerate(names):
-        if level == "pixels":
+        if read_px:
             r = regions[si]
             wins = pixel_windows(r, max_pixels, np.random.default_rng(sample_seed(s, 2)))
-        else:
+        if level == "cells":
             sel = (df["sample"] == s).to_numpy()
         for mi, m in enumerate(markers):
-            if level == "pixels":
-                v = np.concatenate([source.read(r.image, m, bb)[wm] for bb, wm in wins]).astype(np.float64)
-            else:
-                v = df[cell_column(df, cfg, m)].to_numpy(np.float64)[sel]
+            px = np.concatenate([source.read(r.image, m, bb)[wm] for bb, wm in wins]).astype(np.float64) if read_px else None
+            v = px if level == "pixels" else df[cell_column(df, cfg, m)].to_numpy(np.float64)[sel]
             v = v[np.isfinite(v)]
             st = suggest(v, level)
+            st["p1_cells"] = p1_positive(v) if level == "cells" else np.nan
+            st["p1_pixels"] = p1_positive(px) if px is not None else np.nan
+            if px is not None and level == "cells" and pileup(px) >= REMOVED["pixels"]:
+                st["background_removed"] = True  # e.g. DAPI: no zero cells, but most pixels 0
             stats[mi][si] = st
             if v.size:
                 # grid fine enough for the smallest cofactor the slider is likely to reach
-                c0 = min((x for x in (st["cofactor"], config_cofactor(cfg, m)) if np.isfinite(x) and x > 0),
-                         default=max(float(np.abs(v).max()), 1.0)) / 30
+                c0 = min((x for x in (st["cofactor"], st["p1_cells"], st["p1_pixels"], config_cofactor(cfg, m))
+                          if np.isfinite(x) and x > 0), default=max(float(np.abs(v).max()), 1.0)) / 30
                 hists[mi, si], u0, u1 = _hist(v, c0)
                 grids[mi, si] = (c0, u0, u1)
                 ranges[mi, si] = np.percentile(v, [0.1, 99.9])
+
+    # background-subtracted markers, or all markers once most of them are: the chosen p1 rule
+    n_removed = sum(any(st["background_removed"] for st in stats[mi]) for mi in range(Mk))
+    is_subtracted = n_removed >= Mk / 2
+    key = "p1_cells" if subtracted == "p1-cells" else "p1_pixels"
+    for mi in range(Mk):
+        for st in stats[mi]:
+            if st["background_removed"] or is_subtracted:
+                c = st[key]
+                st.update(cofactor=sig2(c) if np.isfinite(c) and c > 0 else np.nan,
+                          method=subtracted if np.isfinite(c) and c > 0 else "none",
+                          background=np.nan, noise_sd=np.nan, frac_above=np.nan, frac_below=np.nan)
+    for si, s in enumerate(names):
         log.info("  %s: %s", s, ", ".join(f"{m} {stats[mi][si]['cofactor']:g}" if np.isfinite(stats[mi][si]["cofactor"])
                                           else f"{m} -" for mi, m in enumerate(markers)))
-        removed = [m for mi, m in enumerate(markers) if stats[mi][si]["background_removed"]]
-        if removed and level == "pixels":
-            log.warning("  %s: background removed (most pixels exactly 0) in %s: no suggestion from pixels; "
-                        "segment, then run `vollmilch cofactors` again", s, ", ".join(removed))
-        elif removed:
-            log.info("  %s: background removed in %s: split between stray-signal and positive cells",
-                     s, ", ".join(removed))
+    if is_subtracted or n_removed:
+        what = "the image is background-subtracted" if is_subtracted else f"{n_removed} markers are background-subtracted"
+        if subtracted == "p1-cells" and level == "pixels":
+            log.warning("%s: the suggestion is the 1st percentile of the positive cell values, so segment first and "
+                        "run `vollmilch cofactors` again (or use --subtracted p1-pixels)", what)
+        else:
+            log.info("%s: cofactor = 1st percentile of the positive %s values", what,
+                     "cell" if subtracted == "p1-cells" else "pixel")
     source.close()
 
     out_dir = cfg.out / "cofactors"
@@ -357,7 +360,7 @@ def run_cofactors(cfg, level="auto", samples=None, max_pixels=2_000_000, out_pat
         "report_id": hashlib.sha1(f"{cfg.out.resolve()}|{cfg.get('project')}|cofactors".encode()).hexdigest()[:12],
         "created": time.strftime("%Y-%m-%d %H:%M"), "version": __version__, "level": level,
         "max_pixels": max_pixels if level == "pixels" else None,
-        "samples": names, "markers": mmeta, "n_fine": N_FINE, "k_sd": K_SD, "split_min_eta": SPLIT_MIN_ETA, "blob": blob.index,
+        "samples": names, "markers": mmeta, "n_fine": N_FINE, "k_sd": K_SD, "subtracted_rule": subtracted, "is_subtracted": bool(is_subtracted), "blob": blob.index,
         "default_cofactor": float(cfg["transform"].get("cofactor", 5)),
         "config_name": Path(cfg["_config_path"]).name,
         "cofactors_file": Path(cf_src).name if cf_src else None,

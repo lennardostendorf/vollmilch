@@ -119,7 +119,7 @@ def cmd_cofactors(a):
     cfg = _cfg(a.config)
     setup_logging(cfg.out, a.verbose)
     print(run_cofactors(cfg, level=a.level, samples=a.samples.split(",") if a.samples else None,
-                        max_pixels=a.max_pixels, out_path=a.output))
+                        max_pixels=a.max_pixels, out_path=a.output, subtracted=a.subtracted))
 
 
 def cmd_embed(a):
@@ -230,6 +230,9 @@ def main(argv=None):
                         "pixels inside the regions, before segmentation; auto (default): cells once every sample is segmented")
     s.add_argument("--samples", help="comma-separated sample names")
     s.add_argument("--max-pixels", type=int, default=2_000_000, help="pixels sampled per sample (random windows)")
+    s.add_argument("--subtracted", choices=["p1-cells", "p1-pixels"], default="p1-cells",
+                   help="background-subtracted images (e.g. MELC): cofactor = 1st percentile of the positive cell values "
+                        "(default) or of the positive pixel values")
     s.add_argument("-o", "--output", help="HTML path (default: <output>/cofactors/cofactors.html)")
 
     s = add("embed", cmd_embed, "UMAP + Leiden (uncorrected and Harmony) on all cells or a gated population")

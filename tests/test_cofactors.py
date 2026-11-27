@@ -11,7 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 import make_synthetic as ms  # noqa: E402
 
-from vollmilch.cofactors import run_cofactors, suggest  # noqa: E402
+from vollmilch.cofactors import p1_positive, run_cofactors, sig2, suggest  # noqa: E402
 from vollmilch.config import load_config, read_cofactor_table  # noqa: E402
 from vollmilch.embed import cofactor  # noqa: E402
 
@@ -80,19 +80,10 @@ def test_background_removed():
     assert 170 <= suggest(sat)["cofactor"] <= 190
 
 
-def test_split_background_subtracted_cells():
-    """Background set to 0: zero cells, stray-signal cells (~10) and positive cells (~3000)."""
-    r = np.random.default_rng(3)
-    cells = np.r_[np.zeros(5000), r.lognormal(np.log(10), .8, 2500), r.lognormal(np.log(3000), .6, 2500)]
-    s = suggest(cells, "cells")
-    assert s["background_removed"] and s["method"] == "split", s
-    assert 100 <= s["cofactor"] <= 400 and s["split_eta"] > 0.75, s  # between the humps (geometric middle ~170)
-    # one hump only (marker on most cells): still a split, but flagged by its low separation
-    s = suggest(np.r_[np.zeros(100), r.lognormal(np.log(3000), .6, 5000)], "cells")
-    assert s["method"] == "split" and s["split_eta"] < 0.66, s
-    # too few non-zero cells: no suggestion
-    s = suggest(np.r_[np.zeros(1000), r.lognormal(3, 1, 10)], "cells")
-    assert s["method"] == "none" and np.isnan(s["cofactor"])
+def test_p1_positive():
+    v = np.r_[np.zeros(500), np.arange(1, 101.0)]
+    assert p1_positive(v) == np.percentile(np.arange(1, 101.0), 1)
+    assert np.isnan(p1_positive(np.r_[np.zeros(100), 5.0]))  # too few positive values
 
 
 def test_suggest_degenerate():
@@ -214,3 +205,47 @@ def test_config_stats_follow_features(synthetic):
     assert cfg["embedding"]["stat"] == "median" and cfg["report"]["stats"] == ["median"]
     cfg = load_config(_config(synthetic, "features: {stats: [mean, median]}\nreport: {stats: [median, p90]}\n", out="out_stats3"))
     assert cfg["embedding"]["stat"] == "mean" and cfg["report"]["stats"] == ["median"]
+
+
+@pytest.fixture(scope="module")
+def subtracted(synthetic):
+    """The synthetic slide background-subtracted and clipped at 0, like MELC: most pixels exactly 0."""
+    import tifffile
+
+    with tifffile.TiffFile(synthetic / "slide.qptiff") as tf:
+        a = np.stack([p.asarray() for p in tf.series[0].pages[:len(ms.CHANNELS)]]).astype(np.int32)
+    a = np.clip(a - 200, 0, None).astype(np.uint16)  # background ~100 +- 15: all of it goes to 0
+    tifffile.imwrite(synthetic / "sub.ome.tif", a, ome=True, photometric="minisblack",
+                     metadata={"axes": "CYX", "Channel": {"Name": ms.CHANNELS}, "PhysicalSizeX": 0.5, "PhysicalSizeY": 0.5})
+    p = synthetic / "config_sub.yaml"
+    p.write_text("project: sub\noutput: out_sub\nsource: {type: ome_tiff, path: sub.ome.tif}\n"
+                 "regions: {type: geojson, path: outlines.geojson}\nsegmentation: {backend: watershed, mode: expand}\n")
+    return p
+
+
+def test_subtracted_rules(subtracted):
+    import pandas as pd
+
+    from vollmilch.pipeline import run_segmentation
+
+    cfg = load_config(subtracted)
+    per_sample = lambda: pd.read_csv(cfg.out / "cofactors" / "per_sample.csv")  # noqa: E731
+    # before segmentation: the default (cells) rule cannot give a value yet; the pixel rule can
+    m = _manifest(run_cofactors(cfg, max_pixels=200_000).read_text())
+    assert m["level"] == "pixels" and m["is_subtracted"] and all(x["suggested"] is None for x in m["markers"])
+    m = _manifest(run_cofactors(cfg, max_pixels=200_000, subtracted="p1-pixels").read_text())
+    assert {p["method"] for x in m["markers"] for p in x["per_sample"]} == {"p1-pixels"}
+    # after segmentation, default rule: 1st percentile of the positive cell values, for every marker
+    run_segmentation(cfg)
+    m = _manifest(run_cofactors(cfg).read_text())
+    assert m["level"] == "cells" and m["is_subtracted"]
+    t = per_sample()
+    assert set(t["method"]) == {"p1-cells"}
+    cells = pd.concat([pd.read_parquet(cfg.sample_dir(s) / "cells.parquet") for s in ("Biopsy_A", "Biopsy_B")])
+    for _, r in t.iterrows():
+        v = cells.loc[cells["sample"] == r["sample"], f"{r['marker']}:cell:mean"].to_numpy()
+        assert r["cofactor"] == sig2(np.percentile(v[v > 0], 1)), r
+    # pixel rule after segmentation: reads the pixels; pixel values are larger than cell means
+    run_cofactors(cfg, subtracted="p1-pixels")
+    t2 = per_sample()
+    assert set(t2["method"]) == {"p1-pixels"} and (t2["cofactor"].to_numpy() > t["cofactor"].to_numpy()).mean() > 0.5
