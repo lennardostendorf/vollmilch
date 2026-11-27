@@ -33,6 +33,7 @@ Extras: `segment` (Cellpose ≥ 4, i.e. Cellpose-SAM), `embed` (scanpy, harmonyp
 ```bash
 vollmilch init --type qptiff -o config.yaml     # or --type png_folder / ome_tiff; edit the file
 vollmilch inspect config.yaml                   # channels, pixel size, samples; checks channel names
+vollmilch cofactors config.yaml                 # optional: tune asinh cofactors -> vollmilch_out/cofactors/cofactors.html
 vollmilch segment config.yaml                   # resumable; --samples A,B  --force  --reuse-segmentation
 vollmilch embed config.yaml
 vollmilch report config.yaml                    # -> vollmilch_out/report.html
@@ -84,6 +85,24 @@ Regions are normalised once (percentiles over the whole region) and segmented in
 
 Tables are Parquet (`arrow::read_parquet()` in R). The viewer and the embedding use `asinh(value / cofactor)`, with per-marker cofactors in `transform.cofactors`.
 
+## Cofactors
+
+`vollmilch cofactors config.yaml` suggests an asinh cofactor for every marker and writes `vollmilch_out/cofactors/cofactors.html`: one ridge plot per marker (one ridge per sample) with a slider to try other cofactors. *Download cofactors.csv* saves the chosen values; put the file next to the config and point to it:
+
+```yaml
+transform:
+  cofactor: 5                 # markers not in the file
+  cofactors: cofactors.csv    # columns marker,cofactor (others ignored); or a mapping {CD3: 20}
+```
+
+The suggestion puts the cofactor at the upper edge of the background: background mode + 3 × background SD, measured on the low side of the histogram peak, where positive cells don't reach. Background then stays near-linear and compressed around 0, and signal above it is log-scaled. On simulated data this gives the usual values: about 5 for CyTOF-like counts, 1–5 for IMC-like counts, and just above the offset for raw fluorescence. It is computed per sample (▲ on each ridge); the marker suggestion is the median over samples. If the tallest peak is not background (a marker on most cells), the viewer warns. Images whose background was thresholded to exactly 0 (most pixels 0, or cells whose every pixel is 0) have no background noise left to measure: those markers get no suggestion and are set by eye. Cells with a few stray positive pixels should stay near 0, and positive cells should spread out. Saturated pixels are ignored for the estimate.
+
+- `--from pixels` (default) samples up to `--max-pixels` pixels per sample in random windows inside the regions, so it works before segmentation. Pixels are noisier than cell means, so these suggestions err on the high side.
+- `--from cells` uses the segmented cells' intensities (`embedding.compartment`/`stat`), the values that are actually transformed.
+- `suggested.csv` (a valid cofactor file) and `per_sample.csv` (background, SD, suggestion per sample and marker) are written alongside.
+
+New cofactors need `vollmilch embed` and `vollmilch report`, not a new segmentation. Choose them before gating: gates are drawn in asinh units and do not follow a changed cofactor. `vollmilch inspect` warns about cofactor markers that are not channel names.
+
 ## Embedding
 
 `vollmilch embed` z-scores the chosen markers (optionally plus morphology), runs PCA, then neighbours → UMAP → Leiden twice: on the PCA and on the Harmony-corrected PCA (`embedding.batch_key`: `sample` or any `samples_table` column). Above `max_cells`, UMAP runs on a random subset and Leiden labels are transferred to all cells by kNN.
@@ -122,6 +141,7 @@ vollmilch_out/
   samples/<sample>/  cells.parquet  nuclei_labels.tif  cell_labels.tif  thumbs.npz  meta.json
   embeddings/<name>.parquet|json
   qc/<sample>_segmentation.png
+  cofactors/  cofactors.html  suggested.csv  per_sample.csv
   images/<image>.ome.tif        (PNG sources)
   report.html
   export/<gates>/  <image>_cells.geojson  classes.csv  population_counts.csv
@@ -138,7 +158,7 @@ vollmilch_out/
 ## Tests
 
 ```bash
-pytest tests/        # tiling seams, nucleus–cell matching, gate geometry and hierarchy
+pytest tests/        # tiling seams, nucleus–cell matching, gate geometry and hierarchy, cofactor suggestions and CSV
 ```
 
 ## Logo

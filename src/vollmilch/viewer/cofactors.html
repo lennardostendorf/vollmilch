@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<link rel="icon" type="image/svg+xml" href="__FAVICON__">
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--line:#e2e5ea;--text:#1d2330;--muted:#6b7385;--acc:#2f6fed;--acc2:#e8f0ff;--warn:#b25b00}
+*{box-sizing:border-box}
+html,body{margin:0;font:13px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--text);background:var(--bg)}
+header{position:sticky;top:0;z-index:4;min-height:44px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:6px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+#logo svg{width:30px;height:30px;display:block;image-rendering:pixelated}
+header h1{font-size:15px;margin:0;font-weight:600;white-space:nowrap}
+header .meta{color:var(--muted);font-size:12px}
+header .sp{flex:1}
+button,select,input{font:inherit;color:inherit}
+button{background:#fff;border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer}
+button:hover{border-color:#b9c0cc}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+select,input[type=text],input[type=number]{border:1px solid var(--line);border-radius:6px;padding:3px 6px;background:#fff}
+.small{font-size:11px;color:var(--muted)}
+#intro{margin:12px 14px 0;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:12.5px;max-width:1100px}
+#intro p{margin:4px 0}
+code,.kbd{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:#f2f4f8;border:1px solid var(--line);border-radius:3px;padding:0 3px}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px;padding:12px 14px 40px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0}
+.card.changed{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc2)}
+.card h2{font-size:14px;margin:0;font-weight:600;display:flex;align-items:center;gap:6px}
+.card h2 .sp{flex:1}
+.badge{font-size:10.5px;font-weight:600;border-radius:4px;padding:1px 5px;background:var(--acc2);color:#1747a6;display:none}
+.card.changed .badge{display:inline-block}
+.ctl{display:flex;align-items:center;gap:6px;margin:6px 0 2px}
+.ctl input[type=range]{flex:1;min-width:0}
+.ctl input[type=number]{width:84px}
+.ctl button{padding:2px 7px;font-size:12px}
+.sub{font-size:11.5px;color:var(--muted);margin:2px 0 4px}
+.sub b{color:var(--text);font-weight:600}
+.warn{font-size:11.5px;color:var(--warn);margin:2px 0 4px}
+.card canvas{display:block;width:100%}
+.cursor{font-size:11px;color:var(--muted);min-height:15px;font-variant-numeric:tabular-nums}
+#loading{position:fixed;inset:0;background:rgba(246,247,249,.96);display:flex;align-items:center;justify-content:center;font-size:15px;z-index:10}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div id="loading">Loading…</div>
+<header>
+  <span id="logo" title="Vollmilch">__LOGO_SVG__</span><h1 id="title"></h1><span class="meta" id="hmeta"></span>
+  <span class="sp"></span>
+  <input type="text" id="filter" placeholder="filter markers" style="width:130px">
+  <label class="small">density <select id="dens"><option value="lin">linear</option><option value="sqrt" selected>sqrt</option><option value="log">log</option></select></label>
+  <button id="bSugg" title="Set every marker to its suggested cofactor">Use all suggestions</button>
+  <button id="bReset" title="Set every marker back to the value from the config">Reset to config</button>
+  <button id="bCsv" class="primary" title="marker,cofactor table for transform.cofactors">Download cofactors.csv</button>
+</header>
+<div id="intro">
+  <p>Every marker is shown as <code>asinh(intensity / cofactor)</code>, one ridge per sample. Values well below the cofactor are transformed nearly linearly and squeezed towards 0; values well above it are log-scaled. A good cofactor keeps the background (negative cells) as one compact peak near 0 and spreads the positive cells out to its right. The dashed line is <i>intensity = cofactor</i>.</p>
+  <p id="howto"></p>
+  <p><b>Suggested</b> = median over samples of background mode + <span id="ksd"></span> × background SD (▲ on each ridge marks that sample's own suggestion). Set cofactors before gating: the gates are drawn on these axes and shift when a cofactor changes.</p>
+</div>
+<div id="grid"></div>
+<script id="manifest" type="application/json">/*__MANIFEST__*/null</script>
+<script id="blob-data" type="application/octet-stream">__DATA_B64__</script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const M = JSON.parse($("manifest").textContent);
+const NF = M.n_fine, NS = M.samples.length, B = 240;
+const CAT_PAL = ["#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf","#aec7e8","#ffbb78","#98df8a","#ff9896","#c5b0d5","#c49c94","#f7b6d2","#c7c7c7","#dbdb8d","#9edae5"];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt = v => { if (!isFinite(v)) return "NA"; const a = Math.abs(v); if (a !== 0 && (a < 1e-3 || a >= 1e6)) return v.toExponential(2); return (+v.toPrecision(4)).toLocaleString(); };
+const sig3 = v => +v.toPrecision(3);
+const fmtI = v => { const a = Math.abs(v), s = v < 0 ? "−" : ""; return a >= 1e6 ? s + a / 1e6 + "M" : a >= 1e3 ? s + a / 1e3 + "k" : s + a; };
+const LS_KEY = "vollmilch-cofactors:" + M.report_id;
+
+function b64ToBytes(s) {
+  if (Uint8Array.fromBase64) return Uint8Array.fromBase64(s);
+  const CH = 1 << 22, out = new Uint8Array(Math.floor(s.length * 3 / 4)); let o = 0;
+  for (let i = 0; i < s.length; i += CH) { const bin = atob(s.slice(i, i + CH)); for (let j = 0; j < bin.length; j++) out[o++] = bin.charCodeAt(j); }
+  return out.subarray(0, o);
+}
+async function gunzip(u8) { const st = new Blob([u8]).stream().pipeThrough(new DecompressionStream("gzip")); return await new Response(st).arrayBuffer(); }
+
+let H = [];            // per marker: Uint32Array NS * NF
+const value = [];      // current cofactor per marker
+const cards = [];
+
+// ------------------------------------------------------------------ densities
+// Each sample's histogram is stored on its own grid, uniform in u = asinh(x / c0). For a
+// cofactor c, every fine bin is moved to t = asinh(x / c) and counted into B display bins.
+function tRange(m, c) {
+  let a = Math.asinh(m.range[0] / c), b = Math.asinh(m.range[1] / c);
+  if (!(b > a)) { a -= 0.5; b += 0.5; }
+  const p = (b - a) * 0.04; return [a - p, b + p];
+}
+function ridge(mi, si, c, lo, hi, mode) {
+  const g = M.markers[mi].grid[si], out = new Float64Array(B); if (!g || g[0] === null) return null;
+  const [c0, u0, u1] = g, du = (u1 - u0) / NF, h = H[mi], off = si * NF, f = B / (hi - lo);
+  let any = false;
+  for (let k = 0; k < NF; k++) {
+    const n = h[off + k]; if (!n) continue;
+    const t = Math.asinh(c0 * Math.sinh(u0 + (k + 0.5) * du) / c), j = Math.floor((t - lo) * f);
+    if (j >= 0 && j < B) { out[j] += n; any = true; }
+  }
+  if (!any) return null;
+  const sm = new Float64Array(B), K = [0.05, 0.12, 0.2, 0.26, 0.2, 0.12, 0.05];  // small Gaussian
+  for (let j = 0; j < B; j++) { let s = 0; for (let q = -3; q <= 3; q++) { const jj = j + q; if (jj >= 0 && jj < B) s += out[jj] * K[q + 3]; } sm[j] = s; }
+  let mx = 0;
+  for (let j = 0; j < B; j++) { sm[j] = mode === "sqrt" ? Math.sqrt(sm[j]) : mode === "log" ? Math.log1p(sm[j]) : sm[j]; if (sm[j] > mx) mx = sm[j]; }
+  if (mx > 0) for (let j = 0; j < B; j++) sm[j] /= mx;
+  return sm;
+}
+
+// ------------------------------------------------------------------ drawing
+const MG = {l: 92, r: 10, t: 22, b: 30};
+// intensity ticks for the top axis: 0 and ±1, 10, 100, ... inside the shown range (negative
+// ones only if the data go below 0)
+function intensityTicks(lo, hi, c, vmin) {
+  const out = [0], vmax = Math.max(Math.abs(c * Math.sinh(lo)), Math.abs(c * Math.sinh(hi)));
+  for (let k = Math.floor(Math.log10(vmax)) - 6; k <= Math.log10(vmax); k++) { const v = Math.pow(10, k); out.push(v, -v); }
+  return out.filter(v => v >= Math.min(0, vmin)).map(v => ({v, t: Math.asinh(v / c)})).filter(o => o.t >= lo && o.t <= hi).sort((a, b) => a.t - b.t);
+}
+function layout() {
+  const rowH = Math.max(7, Math.min(22, Math.round(220 / NS))), amp = Math.max(18, Math.min(46, rowH * 2.4));
+  return {rowH, amp, height: MG.t + amp + (NS - 1) * rowH + MG.b};
+}
+function draw(mi) {
+  const m = M.markers[mi], cd = cards[mi], cv = cd.canvas, c = value[mi];
+  const L = layout(), W = cv.clientWidth || 360, Hh = L.height, dpr = window.devicePixelRatio || 1;
+  cv.style.height = Hh + "px"; cv.width = Math.round(W * dpr); cv.height = Math.round(Hh * dpr);
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, Hh);
+  const [lo, hi] = tRange(m, c), pw = W - MG.l - MG.r, X = t => MG.l + (t - lo) / (hi - lo) * pw;
+  cd.view = {lo, hi, X, W};
+  const yAxis = Hh - MG.b;
+  // grid lines at integer asinh values, and the intensity = cofactor line
+  ctx.font = "10.5px system-ui,sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (let t = Math.ceil(lo); t <= hi; t++) { const x = X(t); ctx.fillStyle = "#eef0f4"; ctx.fillRect(x, MG.t, 1, yAxis - MG.t); ctx.fillStyle = "#4a5160"; ctx.fillRect(x, yAxis, 1, 4); ctx.fillText(t, x, yAxis + 5); }
+  ctx.fillStyle = "#6b7385"; ctx.fillText("asinh(intensity / cofactor)", MG.l + pw / 2, yAxis + 17);
+  // top axis: raw intensities, so the squeezing below and stretching above the cofactor shows
+  ctx.fillStyle = "#4a5160"; ctx.fillRect(MG.l, MG.t - 4, pw, 1); ctx.textBaseline = "bottom";
+  let lastX = -1e9;
+  for (const {v, t} of intensityTicks(lo, hi, c, m.range[0])) {
+    const x = X(t); ctx.fillStyle = "#4a5160"; ctx.fillRect(x, MG.t - 4, 1, 4);
+    if (x - lastX >= 30) { ctx.fillText(fmtI(v), x, MG.t - 6); lastX = x; }
+  }
+  ctx.textAlign = "right"; ctx.fillStyle = "#6b7385"; ctx.fillText("intensity", MG.l - 6, MG.t - 2); ctx.textAlign = "center"; ctx.textBaseline = "top";
+  const xc = X(Math.asinh(1));
+  ctx.strokeStyle = "#8a90a0"; ctx.setLineDash([4, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(xc + .5, MG.t); ctx.lineTo(xc + .5, yAxis); ctx.stroke(); ctx.setLineDash([]);
+  // ridges, back (top) to front (bottom)
+  const mode = $("dens").value;
+  for (let si = 0; si < NS; si++) {
+    const base = MG.t + L.amp + si * L.rowH, col = CAT_PAL[si % CAT_PAL.length];
+    ctx.fillStyle = "#1d2330"; ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.font = "11px system-ui,sans-serif";
+    const nm = M.samples[si]; ctx.fillText(nm.length > 14 ? nm.slice(0, 13) + "…" : nm, MG.l - 6, base - 3);
+    const d = ridge(mi, si, c, lo, hi, mode);
+    if (d) {
+      ctx.beginPath(); ctx.moveTo(MG.l, base);
+      for (let j = 0; j < B; j++) ctx.lineTo(MG.l + (j + 0.5) / B * pw, base - d[j] * L.amp);
+      ctx.lineTo(MG.l + pw, base); ctx.closePath();
+      ctx.fillStyle = "#ffffff"; ctx.fill(); ctx.globalAlpha = 0.55; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = 1;
+      ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.stroke();
+    }
+    ctx.strokeStyle = "#c9ced8"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(MG.l, base + .5); ctx.lineTo(MG.l + pw, base + .5); ctx.stroke();
+    const ps = m.per_sample[si];
+    if (ps && ps.cofactor) { const ts = Math.asinh(ps.cofactor / c); if (ts >= lo && ts <= hi) { const x = X(ts); ctx.fillStyle = "#1d2330"; ctx.beginPath(); ctx.moveTo(x, base - 6); ctx.lineTo(x - 4, base + 1); ctx.lineTo(x + 4, base + 1); ctx.closePath(); ctx.fill(); } }
+  }
+  ctx.fillStyle = "#4a5160"; ctx.fillRect(MG.l, yAxis, pw, 1);
+  ctx.fillStyle = "#6b7385"; ctx.textAlign = "left"; ctx.textBaseline = "bottom"; ctx.font = "10.5px system-ui,sans-serif"; ctx.fillText("= cofactor", xc + 4, MG.t + 12);
+}
+
+// ------------------------------------------------------------------ cards
+const toSlider = (m, c) => Math.round(1000 * Math.log(c / m.slider[0]) / Math.log(m.slider[1] / m.slider[0]));
+const fromSlider = (m, p) => sig3(m.slider[0] * Math.pow(m.slider[1] / m.slider[0], p / 1000));
+// from: "slider" or "input" (that control already shows the value and is left alone, so a
+// dragged thumb is never moved back to a rounded position), or undefined (buttons, loading)
+function setValue(mi, c, from) {
+  const m = M.markers[mi], cd = cards[mi]; if (!(c > 0)) return;
+  if (c < m.slider[0]) m.slider[0] = c / 2; if (c > m.slider[1]) m.slider[1] = c * 2;  // typed values may lie outside
+  value[mi] = c;
+  if (from !== "slider") cd.range.value = toSlider(m, c);
+  if (from !== "input") cd.num.value = c;
+  cd.el.classList.toggle("changed", c !== m.current);
+  draw(mi); saveLocal();
+}
+function buildCards() {
+  const grid = $("grid");
+  M.markers.forEach((m, mi) => {
+    const el = document.createElement("div"); el.className = "card";
+    const cs = m.per_sample.map(p => p.cofactor).filter(c => c), fb = m.per_sample.map(p => p.frac_below).filter(x => x !== null).sort((a, b) => a - b);
+    const spread = cs.length > 1 ? ` (samples ${fmt(Math.min(...cs))}–${fmt(Math.max(...cs))})` : "";
+    const fbMed = fb.length ? fb[Math.floor(fb.length / 2)] : 0;
+    const removed = m.per_sample.filter(p => p.background_removed), zf = Math.max(...removed.map(p => p.zero_frac), 0);
+    const unit = M.level === "pixels" ? "pixels" : "cells";
+    const src = m.in_config ? (M.cofactors_file || "config") : `default (transform.cofactor)`;
+    el.innerHTML = `<h2>${esc(m.name)}<span class="badge">changed</span><span class="sp"></span></h2>
+      <div class="ctl"><input type="range" min="0" max="1000" step="1"><input type="number" min="0" step="any" title="cofactor"><button data-a="s" title="suggested">suggested</button><button data-a="c" title="value from the config">config</button></div>
+      <div class="sub">${m.suggested ? `suggested <b>${fmt(m.suggested)}</b>${spread}` : "no suggestion"} · config <b>${fmt(m.current)}</b> <span class="small">${esc(src)}</span></div>
+      ${removed.length ? `<div class="warn">Background removed${NS > 1 ? ` in ${removed.length} of ${NS} samples` : ""}: up to ${Math.round(100 * zf)}% of ${unit} are exactly 0, so there is no background noise to place a cofactor against. Choose by eye: cells with a few stray positive pixels should stay near 0, positive cells should spread out.</div>` : ""}
+      ${fbMed > 0.1 ? `<div class="warn">${Math.round(100 * fbMed)}% of values lie clearly below the main peak, so the main peak is probably not the background (e.g. a marker on most cells) and the suggestion is too high. Judge by eye.</div>` : ""}
+      <canvas></canvas><div class="cursor"></div>`;
+    grid.append(el);
+    const [range, num] = el.querySelectorAll(".ctl input"), canvas = el.querySelector("canvas"), cur = el.querySelector(".cursor");
+    cards[mi] = {el, range, num, canvas, view: null};
+    range.oninput = () => setValue(mi, fromSlider(m, +range.value), "slider");
+    num.oninput = () => { const v = parseFloat(num.value); if (v > 0) setValue(mi, v, "input"); };
+    num.onchange = () => { num.value = value[mi]; };
+    const bS = el.querySelector('[data-a="s"]'); bS.disabled = !m.suggested; bS.onclick = () => setValue(mi, m.suggested);
+    el.querySelector('[data-a="c"]').onclick = () => setValue(mi, m.current);
+    canvas.onmousemove = e => { const v = cards[mi].view; if (!v) return; const r = canvas.getBoundingClientRect(), x = e.clientX - r.left;
+      if (x < MG.l || x > v.W - MG.r) { cur.textContent = ""; return; }
+      const t = v.lo + (x - MG.l) / (v.W - MG.l - MG.r) * (v.hi - v.lo); cur.textContent = `asinh ${t.toFixed(2)}  =  intensity ${fmt(value[mi] * Math.sinh(t))}`; };
+    canvas.onmouseleave = () => { cur.textContent = ""; };
+  });
+}
+
+// ------------------------------------------------------------------ persistence, export
+function saveLocal() { try { const o = {}; M.markers.forEach((m, i) => { if (value[i] !== m.current) o[m.name] = value[i]; }); localStorage.setItem(LS_KEY, JSON.stringify(o)); } catch (e) { /* storage unavailable */ } }
+function loadLocal() { try { return JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch (e) { return null; } }
+function download(text, name, type) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], {type})); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+const csvq = v => { v = String(v); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+
+(async function main() {
+  try {
+    const buf = await gunzip(b64ToBytes($("blob-data").textContent.trim()));
+    H = M.markers.map((_, mi) => { const e = M.blob["hist:" + mi]; return new Uint32Array(buf, e.offset, e.length); });
+    $("blob-data").textContent = "";
+    $("title").textContent = M.title;
+    $("hmeta").textContent = `${M.markers.length} markers · ${NS} sample${NS > 1 ? "s" : ""} · from ${M.level === "pixels" ? `image pixels (up to ${M.max_pixels.toLocaleString()} per sample)` : "cell intensities"} · built ${M.created}`;
+    $("ksd").textContent = M.k_sd;
+    $("howto").innerHTML = `Tune the sliders (or type a value), then <b>Download cofactors.csv</b>, put it next to <code>${esc(M.config_name)}</code> and set <code>transform: {cofactors: cofactors.csv}</code>. Markers missing from the file use <code>transform.cofactor</code> (${fmt(M.default_cofactor)}). New cofactors need <code>vollmilch embed</code> and <code>vollmilch report</code> again, not a new segmentation.`
+      + (M.level === "pixels" ? " Pixel intensities are noisier than cell means, so these suggestions err on the high side; once segmented, <code>vollmilch cofactors --from cells</code> uses the values that are actually transformed." : "");
+    buildCards();
+    const stored = loadLocal() || {};
+    M.markers.forEach((m, mi) => { value[mi] = m.current; const s = stored[m.name]; setValue(mi, s > 0 ? s : m.current); });
+    $("dens").onchange = () => M.markers.forEach((_, mi) => draw(mi));
+    $("filter").oninput = () => { const q = $("filter").value.trim().toLowerCase(); M.markers.forEach((m, mi) => cards[mi].el.classList.toggle("hidden", !!q && !m.name.toLowerCase().includes(q))); };
+    $("bSugg").onclick = () => M.markers.forEach((m, mi) => { if (m.suggested) setValue(mi, m.suggested); });
+    $("bReset").onclick = () => M.markers.forEach((m, mi) => setValue(mi, m.current));
+    $("bCsv").onclick = () => download(["marker,cofactor,suggested", ...M.markers.map((m, mi) => [csvq(m.name), value[mi], m.suggested ?? ""].join(","))].join("\n") + "\n", "cofactors.csv", "text/csv");
+    let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => M.markers.forEach((_, mi) => draw(mi)), 120); });
+    $("loading").style.display = "none";
+    M.markers.forEach((_, mi) => draw(mi));  // again now that the cards have their width
+  } catch (e) { $("loading").innerHTML = `<div>Could not load this page: ${esc(e.message)}</div>`; console.error(e); }
+})();
+</script>
+</body>
+</html>

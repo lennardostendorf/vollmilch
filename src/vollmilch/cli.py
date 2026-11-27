@@ -67,6 +67,13 @@ def cmd_inspect(a):
         print(f"\nWARNING: channels not found in the source: {', '.join(sorted(set(bad)))}")
     else:
         print("\nall configured channels found")
+    cof = cfg["transform"].get("cofactors") or {}
+    if cof:
+        unknown = [m for m in cof if m not in src.channel_names]
+        f = cfg["transform"].get("_cofactors_file")
+        print(f"cofactors   {len(cof)} markers" + (f" from {f}" if f else "") + f"; others use {cfg['transform'].get('cofactor', 5)}")
+        if unknown:
+            print(f"WARNING: cofactors for markers that are not channels (check spelling and case): {', '.join(unknown)}")
     src.close()
 
 
@@ -76,6 +83,16 @@ def cmd_segment(a):
     cfg = _cfg(a.config)
     setup_logging(cfg.out, a.verbose)
     run_segmentation(cfg, a.samples.split(",") if a.samples else None, force=a.force, reuse_segmentation=a.reuse_segmentation)
+
+
+def cmd_cofactors(a):
+    from .cofactors import run_cofactors
+    from .pipeline import setup_logging
+
+    cfg = _cfg(a.config)
+    setup_logging(cfg.out, a.verbose)
+    print(run_cofactors(cfg, level=a.level, samples=a.samples.split(",") if a.samples else None,
+                        max_pixels=a.max_pixels, out_path=a.output))
 
 
 def cmd_embed(a):
@@ -166,6 +183,13 @@ def main(argv=None):
     s.add_argument("--samples", help="comma-separated sample names")
     s.add_argument("--force", action="store_true", help="redo finished samples")
     s.add_argument("--reuse-segmentation", action="store_true", help="keep label images; redo features/thumbnails")
+
+    s = add("cofactors", cmd_cofactors, "suggest asinh cofactors per marker; HTML viewer with ridge plots to tune them")
+    s.add_argument("--from", dest="level", choices=["pixels", "cells"], default="pixels",
+                   help="image pixels inside the regions (before segmentation) or the segmented cells' intensities")
+    s.add_argument("--samples", help="comma-separated sample names")
+    s.add_argument("--max-pixels", type=int, default=2_000_000, help="pixels sampled per sample (random windows)")
+    s.add_argument("-o", "--output", help="HTML path (default: <output>/cofactors/cofactors.html)")
 
     s = add("embed", cmd_embed, "UMAP + Leiden (uncorrected and Harmony) on all cells or a gated population")
     s.add_argument("--name", help="embedding name (default: all, or the population name)")

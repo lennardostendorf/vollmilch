@@ -61,10 +61,12 @@ features:
   stats: [mean]                 # any of mean, max, p90, sd
   nuclear_texture: true         # DAPI texture/heterogeneity per nucleus
 
-# Display transform for markers: asinh(value / cofactor)
+# Display transform for markers: asinh(value / cofactor). `vollmilch cofactors` suggests
+# per-marker values and has a viewer to tune them; it writes a CSV usable as `cofactors`.
 transform:
-  cofactor: 5
-  cofactors: {}                 # per-marker overrides, e.g. {CD3: 20, CD68: 50}
+  cofactor: 5                   # markers without their own value
+  cofactors: {}                 # per-marker values, e.g. {CD3: 20, CD68: 50}, or a CSV file
+                                # with columns marker,cofactor, e.g. cofactors: cofactors.csv
 
 # ---------------------------------------------------------------- embedding
 embedding:

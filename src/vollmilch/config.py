@@ -57,6 +57,32 @@ class Config(dict):
         return self.out / "samples" / sample
 
 
+def read_cofactor_table(path) -> dict[str, float]:
+    """marker -> cofactor from a CSV/TSV with columns marker, cofactor (others ignored, e.g. the
+    file written by the cofactor viewer). Rows with an empty cofactor fall back to the default."""
+    import pandas as pd
+
+    t = pd.read_csv(path, sep=None, engine="python", dtype=str, keep_default_na=False)
+    cols = {c.strip().lower(): c for c in t.columns}
+    if "marker" not in cols or "cofactor" not in cols:
+        raise ValueError(f"{path}: needs the columns marker and cofactor (found {', '.join(t.columns)})")
+    out = {}
+    for m, v in zip(t[cols["marker"]], t[cols["cofactor"]]):
+        m, v = (m or "").strip(), (v or "").strip()
+        if not m or not v:
+            continue
+        try:
+            c = float(v)
+        except ValueError:
+            raise ValueError(f"{path}: cofactor of {m} is not a number: {v!r}") from None
+        if not c > 0:
+            raise ValueError(f"{path}: cofactor of {m} must be > 0 (is {v})")
+        if m in out:
+            raise ValueError(f"{path}: marker {m} listed twice")
+        out[m] = c
+    return out
+
+
 def load_config(path: str | Path) -> Config:
     path = Path(path).resolve()
     user = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -78,6 +104,12 @@ def load_config(path: str | Path) -> Config:
         cfg["samples_table"] = res(cfg["samples_table"])
     cfg["output"] = res(cfg["output"])
     cfg["_config_path"] = str(path)
+    tr = cfg["transform"]
+    if isinstance(tr.get("cofactors"), str):
+        tr["_cofactors_file"] = res(tr["cofactors"])
+        tr["cofactors"] = read_cofactor_table(tr["_cofactors_file"])
+    elif tr.get("cofactors") is not None and not isinstance(tr["cofactors"], dict):
+        raise ValueError("transform.cofactors must be a mapping {marker: cofactor} or a CSV file")
 
     seg = cfg["segmentation"]
     if seg["mode"] not in ("nuclei", "expand", "cells"):

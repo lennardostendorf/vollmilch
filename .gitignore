@@ -24,6 +24,7 @@ report*.html
 
 # input data: never commit images, masks or sample tables
 data/
+sample_data/
 synthetic/
 *.qptiff
 *.ome.tif
