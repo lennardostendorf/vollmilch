@@ -68,7 +68,7 @@ def test_background_removed():
     signal = r.lognormal(np.log(5000), 1, 20_000)
     px = np.r_[np.zeros(180_000), signal].round()
     s = suggest(px, "pixels")
-    assert s["background_removed"] and np.isnan(s["cofactor"]) and abs(s["zero_frac"] - 0.9) < 1e-9
+    assert s["background_removed"] and s["method"] == "none" and np.isnan(s["cofactor"]) and abs(s["zero_frac"] - 0.9) < 1e-9
     cells = np.r_[np.zeros(30), r.lognormal(np.log(200), 2, 2970)]  # 1 % of cells all 0
     assert suggest(cells, "cells")["background_removed"]
     # not removed: Poisson counts (0 is only ~2x as common as 1) and clipped noisy background
@@ -78,6 +78,21 @@ def test_background_removed():
     # saturation does not become the background peak
     sat = np.r_[r.normal(150, 10, 180_000), np.full(20_000, 65535.0)].round()
     assert 170 <= suggest(sat)["cofactor"] <= 190
+
+
+def test_split_background_subtracted_cells():
+    """Background set to 0: zero cells, stray-signal cells (~10) and positive cells (~3000)."""
+    r = np.random.default_rng(3)
+    cells = np.r_[np.zeros(5000), r.lognormal(np.log(10), .8, 2500), r.lognormal(np.log(3000), .6, 2500)]
+    s = suggest(cells, "cells")
+    assert s["background_removed"] and s["method"] == "split", s
+    assert 100 <= s["cofactor"] <= 400 and s["split_eta"] > 0.75, s  # between the humps (geometric middle ~170)
+    # one hump only (marker on most cells): still a split, but flagged by its low separation
+    s = suggest(np.r_[np.zeros(100), r.lognormal(np.log(3000), .6, 5000)], "cells")
+    assert s["method"] == "split" and s["split_eta"] < 0.66, s
+    # too few non-zero cells: no suggestion
+    s = suggest(np.r_[np.zeros(1000), r.lognormal(3, 1, 10)], "cells")
+    assert s["method"] == "none" and np.isnan(s["cofactor"])
 
 
 def test_suggest_degenerate():
@@ -104,10 +119,10 @@ def synthetic(tmp_path_factory):
     return d
 
 
-def _config(d: Path, extra=""):
-    p = d / "config.yaml"
+def _config(d: Path, extra="", out="out"):
+    p = d / f"config_{out}.yaml"
     p.write_text(f"""project: test
-output: out
+output: {out}
 source: {{type: qptiff, path: slide.qptiff}}
 regions: {{type: geojson, path: outlines.geojson}}
 segmentation: {{backend: watershed, mode: expand}}
@@ -138,3 +153,19 @@ def test_viewer_from_pixels(synthetic):
     # suggested.csv is itself a valid cofactor table
     t = read_cofactor_table(cfg.out / "cofactors" / "suggested.csv")
     assert set(t) == set(ms.CHANNELS)
+
+
+def _manifest(html: str) -> dict:
+    return json.loads(re.search(r'<script id="manifest" type="application/json">(.*?)</script>', html, re.S).group(1))
+
+
+def test_auto_uses_cells_once_segmented(synthetic):
+    from vollmilch.pipeline import run_segmentation
+
+    cfg = load_config(_config(synthetic, out="out_auto"))
+    assert _manifest(run_cofactors(cfg, max_pixels=100_000).read_text())["level"] == "pixels"
+    run_segmentation(cfg)
+    m = _manifest(run_cofactors(cfg).read_text())
+    assert m["level"] == "cells"
+    for x in m["markers"][1:]:  # cell means: background ~100 with a small SD (DAPI: every cell is positive)
+        assert 95 <= x["suggested"] <= 130 and {p["method"] for p in x["per_sample"]} == {"background"}, x

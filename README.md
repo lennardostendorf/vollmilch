@@ -33,8 +33,8 @@ Extras: `segment` (Cellpose ≥ 4, i.e. Cellpose-SAM), `embed` (scanpy, harmonyp
 ```bash
 vollmilch init --type qptiff -o config.yaml     # or --type png_folder / ome_tiff; edit the file
 vollmilch inspect config.yaml                   # channels, pixel size, samples; checks channel names
-vollmilch cofactors config.yaml                 # optional: tune asinh cofactors -> vollmilch_out/cofactors/cofactors.html
 vollmilch segment config.yaml                   # resumable; --samples A,B  --force  --reuse-segmentation
+vollmilch cofactors config.yaml                 # optional: tune asinh cofactors -> vollmilch_out/cofactors/cofactors.html
 vollmilch embed config.yaml
 vollmilch report config.yaml                    # -> vollmilch_out/report.html
 # gate in the browser, click "Save gates"
@@ -95,11 +95,15 @@ transform:
   cofactors: cofactors.csv    # columns marker,cofactor (others ignored); or a mapping {CD3: 20}
 ```
 
-The suggestion puts the cofactor at the upper edge of the background: background mode + 3 × background SD, measured on the low side of the histogram peak, where positive cells don't reach. Background then stays near-linear and compressed around 0, and signal above it is log-scaled. On simulated data this gives the usual values: about 5 for CyTOF-like counts, 1–5 for IMC-like counts, and just above the offset for raw fluorescence. It is computed per sample (▲ on each ridge); the marker suggestion is the median over samples. If the tallest peak is not background (a marker on most cells), the viewer warns. Images whose background was thresholded to exactly 0 (most pixels 0, or cells whose every pixel is 0) have no background noise left to measure: those markers get no suggestion and are set by eye. Cells with a few stray positive pixels should stay near 0, and positive cells should spread out. Saturated pixels are ignored for the estimate.
+The suggestion puts the cofactor at the upper edge of the negative cells. Negatives then stay near-linear and compressed around 0, and signal above them is log-scaled. It is computed per sample (▲ on each ridge); the marker suggestion is the median over samples. How the upper edge is found depends on the data:
 
-- `--from pixels` (default) samples up to `--max-pixels` pixels per sample in random windows inside the regions, so it works before segmentation. Pixels are noisier than cell means, so these suggestions err on the high side.
+- **Measurable background** (raw or offset intensities): background mode + 3 × background SD, measured on the low side of the histogram peak, where positive cells don't reach. On simulated data this gives the usual values: about 5 for CyTOF-like counts, 1–5 for IMC-like counts, and just above the offset for raw fluorescence. Saturated pixels are ignored. If the tallest peak is not background (a marker on most cells), the viewer warns.
+- **Background subtracted** (background set to exactly 0, as in the standard MELC preprocessing): recognised by a pile-up of exact zeros. That means most pixels, or cells whose every pixel is 0, which noise never produces. The negative cells are then the zero cells plus cells with a few stray positive pixels, and on a log scale the stray-signal cells and the positive cells form two humps. The suggestion is the split between them: the Otsu threshold of log10 of the non-zero cell means. If the two humps are not clearly separated (between-class share of the variance below 0.66; a single hump gives 0.64), the viewer says to judge by eye. That happens with a marker on most cells, or too few positive cells. When most markers are background-subtracted, markers without any zero cells (e.g. DAPI) are flagged as probably on every cell. Pixels can't show the split, because a cell mean mixes zeros and signal, so these markers get a suggestion only from cells.
+
+- `--from auto` (default) uses the cells once every sample is segmented, otherwise pixels.
+- `--from pixels` samples up to `--max-pixels` pixels per sample in random windows inside the regions, so it works before segmentation. Pixels are noisier than cell means, so these suggestions err on the high side.
 - `--from cells` uses the segmented cells' intensities (`embedding.compartment`/`stat`), the values that are actually transformed.
-- `suggested.csv` (a valid cofactor file) and `per_sample.csv` (background, SD, suggestion per sample and marker) are written alongside.
+- `suggested.csv` (a valid cofactor file, plus the method per marker) and `per_sample.csv` (suggestion, method, background and SD or split separation, share of zeros per sample and marker) are written alongside.
 
 New cofactors need `vollmilch embed` and `vollmilch report`, not a new segmentation. Choose them before gating: gates are drawn in asinh units and do not follow a changed cofactor. `vollmilch inspect` warns about cofactor markers that are not channel names.
 

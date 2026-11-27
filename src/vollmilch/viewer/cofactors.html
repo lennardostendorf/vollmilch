@@ -37,6 +37,7 @@ code,.kbd{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;backg
 .sub{font-size:11.5px;color:var(--muted);margin:2px 0 4px}
 .sub b{color:var(--text);font-weight:600}
 .warn{font-size:11.5px;color:var(--warn);margin:2px 0 4px}
+.info{font-size:11.5px;color:var(--muted);margin:2px 0 4px}
 .card canvas{display:block;width:100%}
 .cursor{font-size:11px;color:var(--muted);min-height:15px;font-variant-numeric:tabular-nums}
 #loading{position:fixed;inset:0;background:rgba(246,247,249,.96);display:flex;align-items:center;justify-content:center;font-size:15px;z-index:10}
@@ -57,7 +58,7 @@ code,.kbd{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;backg
 <div id="intro">
   <p>Every marker is shown as <code>asinh(intensity / cofactor)</code>, one ridge per sample. Values well below the cofactor are transformed nearly linearly and squeezed towards 0; values well above it are log-scaled. A good cofactor keeps the background (negative cells) as one compact peak near 0 and spreads the positive cells out to its right. The dashed line is <i>intensity = cofactor</i>.</p>
   <p id="howto"></p>
-  <p><b>Suggested</b> = median over samples of background mode + <span id="ksd"></span> × background SD (▲ on each ridge marks that sample's own suggestion). Set cofactors before gating: the gates are drawn on these axes and shift when a cofactor changes.</p>
+  <p><b>Suggested</b> = median over samples of each sample's suggestion (▲ on its ridge), which sits at the upper edge of the negative cells. With a measurable background: background mode + <span id="ksd"></span> × background SD. Background-subtracted (background set to exactly 0): the split between cells with only a few stray positive pixels and positive cells, which form two humps on the log scale. Set cofactors before gating: the gates are drawn on these axes and shift when a cofactor changes.</p>
 </div>
 <div id="grid"></div>
 <script id="manifest" type="application/json">/*__MANIFEST__*/null</script>
@@ -185,19 +186,27 @@ function setValue(mi, c, from) {
 }
 function buildCards() {
   const grid = $("grid");
+  // most markers background-subtracted: the image was, so a marker without zero cells is on every cell
+  const subtracted = M.markers.filter(m => m.per_sample.some(p => p.background_removed)).length >= M.markers.length / 2;
   M.markers.forEach((m, mi) => {
     const el = document.createElement("div"); el.className = "card";
     const cs = m.per_sample.map(p => p.cofactor).filter(c => c), fb = m.per_sample.map(p => p.frac_below).filter(x => x !== null).sort((a, b) => a - b);
     const spread = cs.length > 1 ? ` (samples ${fmt(Math.min(...cs))}–${fmt(Math.max(...cs))})` : "";
     const fbMed = fb.length ? fb[Math.floor(fb.length / 2)] : 0;
     const removed = m.per_sample.filter(p => p.background_removed), zf = Math.max(...removed.map(p => p.zero_frac), 0);
+    const etas = m.per_sample.map(p => p.split_eta).filter(x => x !== null).sort((a, b) => a - b), eta = etas.length ? etas[Math.floor(etas.length / 2)] : null;
+    const inN = NS > 1 ? ` in ${removed.length} of ${NS} samples` : "";
     const unit = M.level === "pixels" ? "pixels" : "cells";
     const src = m.in_config ? (M.cofactors_file || "config") : `default (transform.cofactor)`;
     el.innerHTML = `<h2>${esc(m.name)}<span class="badge">changed</span><span class="sp"></span></h2>
       <div class="ctl"><input type="range" min="0" max="1000" step="1"><input type="number" min="0" step="any" title="cofactor"><button data-a="s" title="suggested">suggested</button><button data-a="c" title="value from the config">config</button></div>
       <div class="sub">${m.suggested ? `suggested <b>${fmt(m.suggested)}</b>${spread}` : "no suggestion"} · config <b>${fmt(m.current)}</b> <span class="small">${esc(src)}</span></div>
-      ${removed.length ? `<div class="warn">Background removed${NS > 1 ? ` in ${removed.length} of ${NS} samples` : ""}: up to ${Math.round(100 * zf)}% of ${unit} are exactly 0, so there is no background noise to place a cofactor against. Choose by eye: cells with a few stray positive pixels should stay near 0, positive cells should spread out.</div>` : ""}
-      ${fbMed > 0.1 ? `<div class="warn">${Math.round(100 * fbMed)}% of values lie clearly below the main peak, so the main peak is probably not the background (e.g. a marker on most cells) and the suggestion is too high. Judge by eye.</div>` : ""}
+      ${removed.length && M.level === "pixels" ? `<div class="warn">Background removed${inN}: up to ${Math.round(100 * zf)}% of pixels are exactly 0, so pixels show no background to measure. Segment, then run <code>vollmilch cofactors</code> again: from the cells it suggests the split between stray-signal and positive cells.</div>` : ""}
+      ${removed.length && M.level === "cells" ? `<div class="info">Background removed${inN} (up to ${Math.round(100 * zf)}% of cells exactly 0): suggestion = split between cells with only stray signal (left hump) and positive cells (right hump).</div>` : ""}
+      ${removed.length && M.level === "cells" && eta === null ? `<div class="warn">Too few non-zero cells for a split. Judge by eye: cells with a few stray positive pixels should stay near 0, positive cells should spread out.</div>` : ""}
+      ${eta !== null && eta < M.split_min_eta ? `<div class="warn">No clear second hump (separation ${eta.toFixed(2)}; one hump gives 0.64): the marker may be on most cells. Judge by eye: cells with a few stray positive pixels should stay near 0, positive cells should spread out.</div>` : ""}
+      ${subtracted && !removed.length && m.suggested ? `<div class="warn">Most markers in this image are background-subtracted, but this one has no ${M.level} at exactly 0: it is probably on every cell (e.g. a nuclear stain), and the suggestion treats its main hump as background. Judge by eye.</div>` : ""}
+      ${!subtracted && fbMed > 0.1 ? `<div class="warn">${Math.round(100 * fbMed)}% of values lie clearly below the main peak, so the main peak is probably not the background (e.g. a marker on most cells) and the suggestion is too high. Judge by eye.</div>` : ""}
       <canvas></canvas><div class="cursor"></div>`;
     grid.append(el);
     const [range, num] = el.querySelectorAll(".ctl input"), canvas = el.querySelector("canvas"), cur = el.querySelector(".cursor");
@@ -229,7 +238,7 @@ const csvq = v => { v = String(v); return /[",\n]/.test(v) ? `"${v.replace(/"/g,
     $("hmeta").textContent = `${M.markers.length} markers · ${NS} sample${NS > 1 ? "s" : ""} · from ${M.level === "pixels" ? `image pixels (up to ${M.max_pixels.toLocaleString()} per sample)` : "cell intensities"} · built ${M.created}`;
     $("ksd").textContent = M.k_sd;
     $("howto").innerHTML = `Tune the sliders (or type a value), then <b>Download cofactors.csv</b>, put it next to <code>${esc(M.config_name)}</code> and set <code>transform: {cofactors: cofactors.csv}</code>. Markers missing from the file use <code>transform.cofactor</code> (${fmt(M.default_cofactor)}). New cofactors need <code>vollmilch embed</code> and <code>vollmilch report</code> again, not a new segmentation.`
-      + (M.level === "pixels" ? " Pixel intensities are noisier than cell means, so these suggestions err on the high side; once segmented, <code>vollmilch cofactors --from cells</code> uses the values that are actually transformed." : "");
+      + (M.level === "pixels" ? " These suggestions come from image pixels, which are noisier than cell means, so they err on the high side. Once every sample is segmented, running <code>vollmilch cofactors</code> again uses the cells, the values that are actually transformed." : "");
     buildCards();
     const stored = loadLocal() || {};
     M.markers.forEach((m, mi) => { value[mi] = m.current; const s = stored[m.name]; setValue(mi, s > 0 ? s : m.current); });

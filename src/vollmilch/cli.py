@@ -185,8 +185,9 @@ def main(argv=None):
     s.add_argument("--reuse-segmentation", action="store_true", help="keep label images; redo features/thumbnails")
 
     s = add("cofactors", cmd_cofactors, "suggest asinh cofactors per marker; HTML viewer with ridge plots to tune them")
-    s.add_argument("--from", dest="level", choices=["pixels", "cells"], default="pixels",
-                   help="image pixels inside the regions (before segmentation) or the segmented cells' intensities")
+    s.add_argument("--from", dest="level", choices=["auto", "pixels", "cells"], default="auto",
+                   help="cells: the segmented cells' intensities (the values that are transformed); pixels: image "
+                        "pixels inside the regions, before segmentation; auto (default): cells once every sample is segmented")
     s.add_argument("--samples", help="comma-separated sample names")
     s.add_argument("--max-pixels", type=int, default=2_000_000, help="pixels sampled per sample (random windows)")
     s.add_argument("-o", "--output", help="HTML path (default: <output>/cofactors/cofactors.html)")

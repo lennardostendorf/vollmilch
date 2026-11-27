@@ -8,9 +8,14 @@ histogram peak; the SD from its half width at half maximum on the low side, whic
 cells do not reach. On standard data this gives the usual values (about 5 for CyTOF counts,
 1-2 for IMC counts) and a value just above the camera offset for raw fluorescence.
 
-Images whose background was removed (thresholded to exactly 0) have no background noise left to
-measure. They are recognised by a pile-up of exact zeros (most pixels, or a share of cells whose
-every pixel is 0) and get no suggestion: the cofactor is then a matter of judgement.
+Background-subtracted images (background thresholded to exactly 0, e.g. the standard MELC
+preprocessing) have no background noise left to measure. They are recognised by a pile-up of exact
+zeros: most pixels, or cells whose every pixel is 0, which noise never produces. Their negative
+cells are the cells at 0 plus cells with a few stray positive pixels, and on a log scale the
+stray-signal cells and the positive cells form two humps. The cofactor is put at the split between
+them (Otsu threshold of log10 of the non-zero cell means): the same principle, the upper edge of
+the negative cells. Pixels cannot show this split (a cell mean mixes zeros and signal), so such
+markers get a suggestion only from cells.
 """
 from __future__ import annotations
 
@@ -38,6 +43,8 @@ REMOVED = {"pixels": 0.6, "cells": 0.002}  # share piled up at the minimum that 
 N_FINE = 2048   # histogram bins per sample and marker stored in the viewer
 SMOOTH = 1.5    # histogram smoothing (bins) for the peak search
 HWHM_PER_SD = np.sqrt(2 * np.log(2))
+SPLIT_MIN_ETA = 0.66  # Otsu separation below this: one hump, no clear split (a single Gaussian gives 0.64)
+SPLIT_MIN_N = 20      # non-zero cells needed for a split
 
 
 def sig2(x: float) -> float:
@@ -133,27 +140,53 @@ def background(v: np.ndarray):
     return float(m), float(s)
 
 
+def split(v: np.ndarray):
+    """Split between stray-signal and positive cells: Otsu threshold of log10 of the values above
+    the zero pile-up. Returns (split, eta), eta = between-class / total variance (how cleanly
+    the two humps separate), or (nan, nan) with too few values."""
+    from skimage.filters import threshold_otsu
+
+    lv = np.log10(v[v > max(float(v.min()), 0.0)])
+    if lv.size < SPLIT_MIN_N or np.ptp(lv) == 0:
+        return np.nan, np.nan
+    t = threshold_otsu(lv)
+    a, b = lv[lv <= t], lv[lv > t]
+    eta = a.size * b.size / lv.size**2 * (a.mean() - b.mean()) ** 2 / lv.var()
+    return float(10**t), float(eta)
+
+
 def suggest(v: np.ndarray, level: str = "pixels") -> dict:
-    """Suggested cofactor and the background estimate behind it. frac_below is the fraction of
-    values clearly below the peak (< mode - 3 SD): background is the lowest population, so a
-    large value means the main peak is something else (e.g. a marker present on most cells).
-    zero_frac is the share piled up at the minimum; above REMOVED[level] the background was
-    removed and there is no suggestion."""
+    """Suggested cofactor and how it was found (method):
+      background  background mode + 3 SD. frac_below is the fraction of values clearly below the
+                  peak (< mode - 3 SD): background is the lowest population, so a large value means
+                  the main peak is something else (e.g. a marker present on most cells).
+      split       background removed (zero_frac, the share piled up at 0, >= REMOVED[level]), cells:
+                  split between stray-signal and positive cells; split_eta < SPLIT_MIN_ETA means
+                  there is no clear second hump.
+      none        background removed in pixels, or too few values."""
     v = np.asarray(v, np.float64)
     v = v[np.isfinite(v)]
     zero_frac = pileup(v) if v.size else 0.0
     removed = zero_frac >= REMOVED[level]
-    mode, sd = (np.nan, np.nan) if removed else background(v)
+    out = {"cofactor": np.nan, "method": "none", "background": np.nan, "noise_sd": np.nan, "split_eta": np.nan,
+           "frac_above": np.nan, "frac_below": np.nan, "zero_frac": float(zero_frac),
+           "background_removed": bool(removed), "n_values": int(v.size)}
+    if removed:
+        if level == "cells":
+            c, eta = split(v)
+            if np.isfinite(c):
+                c = sig2(c)
+                out.update(cofactor=c, method="split", split_eta=eta, frac_above=float(np.mean(v > c)))
+        return out
+    mode, sd = background(v)
     if not np.isfinite(mode):
-        return {"cofactor": np.nan, "background": np.nan, "noise_sd": np.nan, "frac_above": np.nan,
-                "frac_below": np.nan, "zero_frac": float(zero_frac), "background_removed": bool(removed),
-                "n_values": int(v.size)}
+        return out
     integer = bool(np.all(v[:10000] == np.round(v[:10000])))
     floor = 1.0 if integer else 1e-6 * max(float(np.abs(v).max()), 1e-12)
     c = sig2(max(max(mode, 0.0) + K_SD * sd, floor))
-    return {"cofactor": c, "background": float(mode), "noise_sd": float(sd), "frac_above": float(np.mean(v > c)),
-            "frac_below": float(np.mean(v < mode - K_SD * sd)), "zero_frac": float(zero_frac),
-            "background_removed": False, "n_values": int(v.size)}
+    out.update(cofactor=c, method="background", background=float(mode), noise_sd=float(sd),
+               frac_above=float(np.mean(v > c)), frac_below=float(np.mean(v < mode - K_SD * sd)))
+    return out
 
 
 # ---------------------------------------------------------------------------- values
@@ -215,7 +248,7 @@ def _hist(v: np.ndarray, c0: float):
 
 
 # ---------------------------------------------------------------------------- command
-def run_cofactors(cfg, level="pixels", samples=None, max_pixels=2_000_000, out_path=None) -> Path:
+def run_cofactors(cfg, level="auto", samples=None, max_pixels=2_000_000, out_path=None) -> Path:
     from .pipeline import completed_samples, load_cells, sample_seed
     from .regions import get_regions
     from .sources import open_source
@@ -223,6 +256,12 @@ def run_cofactors(cfg, level="pixels", samples=None, max_pixels=2_000_000, out_p
     t0 = time.time()
     source = open_source(cfg)
     markers = marker_channels(cfg, source)
+    if level == "auto":  # cells once every sample is segmented: those are the values transformed
+        done = set(completed_samples(cfg))
+        want = [r.sample for r in get_regions(cfg, source) if not samples or r.sample in set(samples) or r.name in set(samples)]
+        level = "cells" if want and all(w in done for w in want) else "pixels"
+        log.info("cofactors from %s (%s)", level, "all samples segmented" if level == "cells" else
+                 "not all samples segmented yet; once they are, run again for cell-level suggestions")
     if level == "pixels":
         regions = get_regions(cfg, source)
         if samples:
@@ -235,7 +274,7 @@ def run_cofactors(cfg, level="pixels", samples=None, max_pixels=2_000_000, out_p
         names = [s for s in completed_samples(cfg) if not samples or s in set(samples)]
         df = load_cells(cfg, names) if names else None
     else:
-        raise ValueError("level must be pixels or cells")
+        raise ValueError("level must be auto, pixels or cells")
     if not names:
         raise ValueError("no samples" + ("" if level == "pixels" else "; run `vollmilch segment` first or use --from pixels"))
     log.info("cofactors from %s: %d samples, %d markers", level, len(names), len(markers))
@@ -269,9 +308,12 @@ def run_cofactors(cfg, level="pixels", samples=None, max_pixels=2_000_000, out_p
         log.info("  %s: %s", s, ", ".join(f"{m} {stats[mi][si]['cofactor']:g}" if np.isfinite(stats[mi][si]["cofactor"])
                                           else f"{m} -" for mi, m in enumerate(markers)))
         removed = [m for mi, m in enumerate(markers) if stats[mi][si]["background_removed"]]
-        if removed:
-            log.warning("  %s: background removed (%s exactly 0) in %s: no suggestion, choose by eye",
-                        s, "pixels" if level == "pixels" else "cells", ", ".join(removed))
+        if removed and level == "pixels":
+            log.warning("  %s: background removed (most pixels exactly 0) in %s: no suggestion from pixels; "
+                        "segment, then run `vollmilch cofactors` again", s, ", ".join(removed))
+        elif removed:
+            log.info("  %s: background removed in %s: split between stray-signal and positive cells",
+                     s, ", ".join(removed))
     source.close()
 
     out_dir = cfg.out / "cofactors"
@@ -289,7 +331,8 @@ def run_cofactors(cfg, level="pixels", samples=None, max_pixels=2_000_000, out_p
         sug = sig2(float(np.nanmedian(cs))) if np.isfinite(cs).any() else None
         lo, hi = np.nanmin(ranges[mi, :, 0]), np.nanmax(ranges[mi, :, 1])
         cands = [x for x in (sug, cur, *cs) if x is not None and np.isfinite(x) and x > 0]
-        rows.append({"marker": m, "cofactor": sug, "config": cur,
+        methods = sorted({st["method"] for st in stats[mi]} - {"none"})
+        rows.append({"marker": m, "cofactor": sug, "method": "+".join(methods) or "none", "config": cur,
                      "samples_min": np.nanmin(cs) if np.isfinite(cs).any() else np.nan,
                      "samples_max": np.nanmax(cs) if np.isfinite(cs).any() else np.nan,
                      "frac_below_peak": float(np.nanmedian(fb)) if np.isfinite(fb).any() else np.nan,
@@ -314,7 +357,7 @@ def run_cofactors(cfg, level="pixels", samples=None, max_pixels=2_000_000, out_p
         "report_id": hashlib.sha1(f"{cfg.out.resolve()}|{cfg.get('project')}|cofactors".encode()).hexdigest()[:12],
         "created": time.strftime("%Y-%m-%d %H:%M"), "version": __version__, "level": level,
         "max_pixels": max_pixels if level == "pixels" else None,
-        "samples": names, "markers": mmeta, "n_fine": N_FINE, "k_sd": K_SD, "blob": blob.index,
+        "samples": names, "markers": mmeta, "n_fine": N_FINE, "k_sd": K_SD, "split_min_eta": SPLIT_MIN_ETA, "blob": blob.index,
         "default_cofactor": float(cfg["transform"].get("cofactor", 5)),
         "config_name": Path(cfg["_config_path"]).name,
         "cofactors_file": Path(cf_src).name if cf_src else None,
