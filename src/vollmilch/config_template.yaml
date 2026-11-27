@@ -1,5 +1,6 @@
 # vollmilch configuration
-# Relative paths are resolved relative to this file.
+# Relative paths are resolved relative to this file. Suggested layout: this file in a project
+# folder, the images (and region outlines, samples table) in its data/ subfolder.
 # Check the source and regions first with:  vollmilch inspect config.yaml
 
 project: my_project
@@ -8,7 +9,7 @@ output: vollmilch_out            # all results go here
 # ---------------------------------------------------------------- image source
 source:
   type: qptiff                  # qptiff | png_folder | ome_tiff
-  path: slide.qptiff
+  path: data/slide.qptiff       # <- your image
   # png_folder: path is either ONE folder with one PNG per channel (file name = marker
   # name) or a folder of such folders (each subfolder = one image/sample).
   # pixel_size_um: 0.5          # required for png_folder; overrides file metadata otherwise
@@ -19,7 +20,7 @@ source:
 # Which part of each image to analyse. Each region becomes one sample.
 regions:
   type: geojson                 # geojson | label_image | none
-  path: outlines.geojson        # QuPath: select annotations > File > Export objects as GeoJSON
+  path: data/outlines.geojson   # QuPath: select annotations > File > Export objects as GeoJSON
   # For several images, use {image} in the path, e.g. masks/{image}.geojson or masks/{image}_mask.png
   name_property: name           # annotation name; falls back to classification, then region_<n>
   # include: [B1, B2]           # only these region names
@@ -27,7 +28,7 @@ regions:
 
 # Optional table with one row per sample (column 'sample' plus anything else, e.g. batch,
 # patient, condition). Columns become colour-by options and can be the Harmony batch key.
-# samples_table: samples.csv
+# samples_table: data/samples.csv
 
 # ---------------------------------------------------------------- segmentation
 segmentation:

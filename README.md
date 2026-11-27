@@ -22,26 +22,22 @@ vollmilch --version
 
 or as a standalone command with [uv](https://docs.astral.sh/uv/): `uv tool install --python 3.12 "vollmilch[all] @ git+https://github.com/lennardostendorf/vollmilch"`.
 
-To update to the latest version on GitHub (the version number does not change with every fix, so a plain upgrade may report "already satisfied"):
-
-```bash
-pip install --force-reinstall --no-deps "vollmilch @ git+https://github.com/lennardostendorf/vollmilch"
-```
-
-For development, or to run the demo below, clone the repository:
-
-```bash
-git clone https://github.com/lennardostendorf/vollmilch && cd vollmilch
-mamba env create -f environment.yml      # Python 3.12 + vollmilch[all], editable
-mamba activate vollmilch
-```
-
-Extras: `segment` (Cellpose ≥ 4, i.e. Cellpose-SAM), `embed` (scanpy, harmonypy, leidenalg). Without Cellpose, `segmentation.backend: watershed` gives a classical nuclear segmentation for quick tests. The Cellpose-SAM weights are downloaded by Cellpose on first use. GPU is used automatically (CUDA, or MPS on Apple Silicon).
-
 ## Quick start
 
+Make a project folder with your images in a `data` subfolder, and run every command from the project folder:
+
+```
+my_project/
+  data/            images, plus QuPath region outlines and an optional samples.csv
+  config.yaml      settings, written by vollmilch init and then edited
+  vollmilch_out/   all results, created by vollmilch
+```
+
+`vollmilch init` writes `config.yaml`, a commented settings file that already points to `data/`. Open it and set at least the image (`source.path`), the nuclear channel (`segmentation.nuclear_channel`) and the regions to analyse (`regions`: QuPath outlines, a mask, or whole images). Relative paths in it count from the config file. `vollmilch inspect` then checks that the images, channels and regions are found, before anything long runs.
+
 ```bash
-vollmilch init --type qptiff -o config.yaml     # or --type png_folder / ome_tiff; edit the file
+cd my_project
+vollmilch init --type qptiff -o config.yaml     # or --type ome_tiff / png_folder; then edit config.yaml
 vollmilch inspect config.yaml                   # channels, pixel size, samples; checks channel names
 vollmilch segment config.yaml                   # resumable; --samples A,B  --force  --reuse-segmentation
 vollmilch cofactors config.yaml                 # optional: tune asinh cofactors -> vollmilch_out/cofactors/cofactors.html
@@ -53,7 +49,12 @@ vollmilch export config.yaml report_gates.json  # -> vollmilch_out/export/report
 
 `vollmilch run config.yaml` does segment + embed + report in one go. `vollmilch to_seurat config.yaml` exports the cells to Seurat (see below).
 
-To try it without data, from a clone of the repository: `python tests/make_synthetic.py data && vollmilch run examples/demo_synthetic.yaml` (synthetic slide with two biopsies; the report ends up in `demo_out/report.html`).
+To try it without your own data, on a synthetic slide with two biopsies (the report ends up in `demo_out/report.html`):
+
+```bash
+git clone https://github.com/lennardostendorf/vollmilch && cd vollmilch
+python tests/make_synthetic.py data && vollmilch run examples/demo_synthetic.yaml
+```
 
 ## Inputs
 
@@ -175,24 +176,6 @@ vollmilch_out/
   seurat/  seurat.rds  make_seurat.R  matrix.mtx.gz  features.tsv.gz  barcodes.tsv.gz  asinh.mtx.gz  ...
   vollmilch.log
 ```
-
-## Practical notes
-
-- **Report size** is mostly thumbnails (JPEG atlases, roughly 0.5–1 kB per cell and channel). Tune `thumbnails.max_per_sample`, `thumbnails.size_um` and `report.max_thumbnails_total`. After changing thumbnail channels, run `vollmilch segment --reuse-segmentation` (keeps the masks).
-- **Memory**: a region is held as two label images plus one channel; sums stream over row blocks, and the order statistics (`median`, `max`, `p90`) sort each channel's pixels per cell once. Measured on a synthetic 6,000 × 10,400 px region with 80k cells and 8 channels (nucleus + cell): `mean` (default) 12 s and 1.7 GB peak, `median` 18 s and 2.2 GB; all four statistics on nucleus, cell and cytoplasm 25 s and 2.7 GB. Time and memory grow about in proportion to the region's pixels: a 20k × 20k px biopsy has 6.4 times as many.
-- **Cellpose-SAM** needs no diameter; set `diameter_um` only if objects come out systematically too small or too large. For `cells` mode, choose membrane/cytoplasm markers that outline most cells (Na/K-ATPase, CD45, HLA class I, pan-cytokeratin).
-- Runs are reproducible (`embedding.seed`; random subsets are seeded per sample).
-
-## Tests
-
-```bash
-pytest tests/        # tiling seams, nucleus–cell matching, gate geometry and hierarchy, cofactor suggestions and CSV
-```
-
-## Logo
-
-`docs/make_workflow.py` draws the workflow diagram (`docs/vollmilch_workflow.svg` / `.png`). `docs/make_logo.py` draws the pixel-art glass of milk (`docs/vollmilch_logo.svg`, PNGs at 128–512 px, and the banner). The report shows it in its header and as the browser-tab icon.
-
 
 ## License
 

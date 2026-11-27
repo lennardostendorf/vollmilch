@@ -50,7 +50,7 @@ if LOGO:
     inner = re.sub(r"<title>.*?</title>", "", inner)
     a(f'<g transform="translate({M},26) scale(2)" shape-rendering="crispEdges">{inner}</g>')
 text(M + 80, 62, "Vollmilch workflow", 28, 700)
-text(M + 80, 90, "multiplex histology → cells → gates → QuPath", 15, 400, MUTED)
+text(M + 80, 90, "multiplex histology → cells → gates → QuPath / Seurat", 15, 400, MUTED)
 
 xs = [M + i * (CW + GAP) for i in range(len(STAGES))]
 for i, (st, x) in enumerate(zip(STAGES, xs)):

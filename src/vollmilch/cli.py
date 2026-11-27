@@ -26,13 +26,16 @@ def cmd_init(a):
     txt = template_text()
     if a.type == "png_folder":
         txt = (txt.replace("type: qptiff ", "type: png_folder")
-                  .replace("path: slide.qptiff", "path: png_images            # folder (or folder of folders) of <marker>.png")
+                  .replace("path: data/slide.qptiff       # <- your image",
+                           "path: data                    # folder of <marker>.png, or a folder of such folders")
                   .replace("# pixel_size_um: 0.5 ", "pixel_size_um: 0.5   ")
                   .replace("type: geojson                 # geojson", "type: none                    # geojson"))
     elif a.type == "ome_tiff":
-        txt = txt.replace("type: qptiff ", "type: ome_tiff").replace("path: slide.qptiff", "path: image.ome.tif")
+        txt = (txt.replace("type: qptiff ", "type: ome_tiff")
+                  .replace("path: data/slide.qptiff       # <- your image", "path: data/image.ome.tif      # <- your image, or a folder of .ome.tif files"))
     out.write_text(txt, encoding="utf-8")
-    print(f"wrote {out}; edit it, then run: vollmilch inspect {out}")
+    print(f"wrote {out}: set the image (source.path), the nuclear channel and the regions in it, then run: "
+          f"vollmilch inspect {out}")
 
 
 def cmd_inspect(a):
