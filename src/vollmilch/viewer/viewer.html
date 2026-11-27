@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<link rel="icon" type="image/svg+xml" href="__FAVICON__">
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--line:#e2e5ea;--text:#1d2330;--muted:#6b7385;--acc:#2f6fed;--acc2:#e8f0ff;--warn:#b25b00}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font:13px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--text);background:var(--bg)}
+header{height:44px;display:flex;align-items:center;gap:12px;padding:0 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+#logo svg{width:30px;height:30px;display:block;image-rendering:pixelated}
+header h1{font-size:15px;margin:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40vw}
+header .meta{color:var(--muted);font-size:12px}
+header .sp{flex:1}
+button,select,input[type=text],input[type=number]{font:inherit;color:inherit}
+button{background:#fff;border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer}
+button:hover{border-color:#b9c0cc}
+button.on{background:var(--acc2);border-color:var(--acc);color:#1747a6}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+select,input[type=text],input[type=number]{border:1px solid var(--line);border-radius:6px;padding:3px 6px;background:#fff;max-width:100%}
+#app{display:grid;grid-template-columns:280px minmax(420px,1fr) 380px;height:calc(100% - 44px)}
+aside{background:var(--panel);overflow:auto;border-right:1px solid var(--line)}
+aside#right{border-right:0;border-left:1px solid var(--line)}
+section{padding:10px 12px;border-bottom:1px solid var(--line)}
+section h2{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;font-weight:600;display:flex;align-items:center;gap:6px}
+section h2 .sp{flex:1}
+.row{display:flex;align-items:center;gap:6px;margin:4px 0}
+.row label{color:var(--muted);min-width:44px}
+.row select{flex:1;min-width:0}
+.row input[type=range]{flex:1;min-width:0;width:60px}
+.small{font-size:11px;color:var(--muted)}
+.chk{display:flex;align-items:center;gap:6px;padding:1px 0;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chk input{margin:0}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;flex:none;border:1px solid rgba(0,0,0,.15)}
+main{display:flex;flex-direction:column;min-width:0;min-height:0}
+#toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+#crumbs{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+#crumbs a{color:var(--acc);cursor:pointer;text-decoration:none}
+#crumbs b{font-weight:600}
+#plotwrap{position:relative;flex:1 1 60%;min-height:260px;background:#fff}
+#plotwrap canvas{position:absolute;inset:0;width:100%;height:100%}
+#overlay{cursor:crosshair}
+#tooltip{position:absolute;pointer-events:none;background:rgba(20,24,33,.92);color:#fff;padding:5px 7px;border-radius:5px;font-size:11.5px;display:none;white-space:nowrap;z-index:3}
+#gbar{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+#gbar .sp{flex:1}
+#hoverBox{display:grid;grid-template-columns:168px 1fr;gap:10px;align-items:start}
+#hoverCv{width:168px;height:168px;background:#14171d;border-radius:4px;image-rendering:pixelated}
+#hoverInfo{font-size:12px;min-width:0;overflow:hidden}
+#hoverInfo b{font-weight:600}
+#hoverInfo table{margin-top:4px}
+#hoverInfo td{padding:1px 4px}
+#galleryWrap{flex:0 0 auto;height:34%;min-height:120px;overflow:auto;background:#14171d;padding:6px}
+#gallery{display:flex;flex-wrap:wrap;gap:5px}
+.tile{position:relative;cursor:pointer;line-height:0}
+.tile canvas{border-radius:3px;outline:2px solid transparent}
+.tile.sel canvas{outline-color:#ffd400}
+.tile span{position:absolute;left:2px;bottom:2px;font-size:9.5px;line-height:1.2;color:#fff;background:rgba(0,0,0,.55);padding:0 3px;border-radius:2px}
+#info{font-size:12px;color:var(--muted)}
+#info b{color:var(--text)}
+.tree{margin:0;padding:0;list-style:none}
+.pop{display:grid;grid-template-columns:14px 1fr auto auto;gap:6px;align-items:center;padding:3px 4px;border-radius:5px;cursor:pointer}
+.pop:hover{background:#f2f4f8}
+.pop.cur{background:var(--acc2)}
+.pop .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pop .n{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px;text-align:right}
+.pop .acts{display:flex;gap:2px;opacity:.25}
+.pop:hover .acts{opacity:1}
+.pop .acts button{padding:0 5px;font-size:11px;border-radius:4px}
+.pop input[type=color]{width:14px;height:14px;padding:0;border:0;background:none;cursor:pointer}
+table{border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:11.5px}
+th,td{padding:2px 5px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:600;position:sticky;top:0;background:#fff}
+.tablewrap{overflow:auto;max-height:300px}
+#heat td.v{min-width:16px;padding:0;height:16px}
+#heat th.vert{writing-mode:vertical-rl;transform:rotate(180deg);text-align:left;padding:4px 1px;font-weight:500;color:var(--text);height:auto}
+.chrow{display:grid;grid-template-columns:16px 1fr 22px;gap:5px;align-items:center;margin-top:6px}
+.chrow input[type=color]{width:22px;height:18px;padding:0;border:1px solid var(--line);border-radius:3px;background:none}
+.chrow .rng{grid-column:2/4;display:flex;gap:4px;align-items:center}
+.chrow .rng input{flex:1;min-width:0}
+.legend{max-height:180px;overflow:auto;margin-top:6px}
+#loading{position:fixed;inset:0;background:rgba(246,247,249,.96);display:flex;align-items:center;justify-content:center;font-size:15px;z-index:10;flex-direction:column;gap:6px}
+.note{background:#fff7e6;border:1px solid #f3d9a6;color:#7a4b00;border-radius:6px;padding:6px 8px;font-size:12px;margin-top:6px}
+.kbd{border:1px solid var(--line);border-radius:3px;padding:0 3px;font-size:11px;background:#fafbfc}
+#help{display:none;position:fixed;right:16px;top:52px;width:420px;max-height:80vh;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.15);padding:12px 14px;z-index:5}
+#help h3{margin:6px 0;font-size:13px}
+#help p,#help li{font-size:12.5px}
+</style>
+</head>
+<body>
+<div id="loading"><div>Loading cells…</div><div class="small" id="loadmsg"></div></div>
+<header>
+  <span id="logo" title="Vollmilch">__LOGO_SVG__</span><h1 id="title"></h1><span class="meta" id="hmeta"></span>
+  <span class="sp"></span>
+  <button id="bSave" title="Download the gates as JSON (use with: vollmilch export)">Save gates</button>
+  <button id="bLoad" title="Load a gates JSON">Load gates</button>
+  <input type="file" id="fLoad" accept=".json,application/json" style="display:none">
+  <button id="bClasses" title="CSV of the population of every cell loaded in this viewer">Classes CSV</button>
+  <button id="bHelp">Help</button>
+</header>
+<div id="app">
+<aside id="left">
+  <section><h2>Samples<span class="sp"></span><button id="sAll" class="small">all</button><button id="sNone" class="small">none</button></h2><div id="samples"></div></section>
+  <section><h2>Plot</h2>
+    <div class="row"><label>X</label><select id="xSel"></select><label class="chk" title="log10 axis"><input type="checkbox" id="xLog">log</label></div>
+    <div class="row"><label>Y</label><select id="ySel"></select><label class="chk" title="log10 axis"><input type="checkbox" id="yLog">log</label></div>
+    <div class="row" id="embRow"><label>UMAP</label><select id="embSel"></select><button id="bUmap">show</button></div>
+    <div class="row"><button id="bSpatial" title="x/y position in µm, QuPath orientation">Spatial</button><button id="bSwap" title="Swap axes">Swap X/Y</button>
+      <label class="chk" title="Axis range: robust (0.1–99.9 percentile) or full"><input type="checkbox" id="fullRange">full range</label></div>
+  </section>
+  <section><h2>Colour</h2>
+    <div class="row"><select id="colSel"></select></div>
+    <div class="row"><label>size</label><input type="range" id="ptSize" min="0.5" max="16" step="0.5" value="2"><span id="ptSizeV" class="small" style="width:30px;text-align:right"></span>
+      <label class="chk" title="Scale dot size with the number of cells plotted"><input type="checkbox" id="ptAuto" checked>auto</label></div>
+    <div class="row"><label>alpha</label><input type="range" id="ptAlpha" min="0.05" max="1" step="0.05" value="0.6"><span id="ptAlphaV" class="small" style="width:30px;text-align:right">0.6</span></div>
+    <div class="legend" id="legend"></div>
+  </section>
+  <section id="thumbSec"><h2>Thumbnails</h2>
+    <div id="chans"></div>
+    <div class="row" style="margin-top:8px"><label>outline</label><select id="outSel"><option value="0">none</option><option value="1">nucleus</option><option value="2">cell</option><option value="3" selected>both</option></select></div>
+    <div class="row"><label>tile</label><select id="tileSel"><option>56</option><option selected>80</option><option>112</option><option>160</option></select><label>γ</label><input type="number" id="gamma" value="1" step="0.1" min="0.2" max="3" style="width:56px"></div>
+  </section>
+</aside>
+<main>
+  <div id="toolbar">
+    <button id="mSelect" class="on" title="Drag a box to view cells; click a point to inspect it">Select</button>
+    <button id="mRect" title="Drag a rectangle gate. Edges dragged to the plot border are open (infinite).">Rectangle gate</button>
+    <button id="mPoly" title="Click vertices; double-click, Enter or click the first vertex to close; Esc cancels">Polygon gate</button>
+    <input type="text" id="gName" placeholder="new gate name" style="width:150px">
+    <span class="sp" style="flex:1"></span>
+    <span id="crumbs"></span>
+  </div>
+  <div id="plotwrap"><canvas id="plot"></canvas><canvas id="overlay"></canvas><div id="tooltip"></div></div>
+  <div id="gbar"><span id="info">Click a point or drag a box to see cells.</span><span class="sp"></span>
+    <button id="bRandom" title="Random cells (with thumbnails) of the population shown in the plot">Random cells of shown population</button>
+    <select id="galN"><option>48</option><option selected>96</option><option>200</option><option>400</option></select></div>
+  <div id="galleryWrap"><div id="gallery"></div></div>
+</main>
+<aside id="right">
+  <section id="hoverSec"><h2>Cell<span class="sp"></span><label class="chk" style="text-transform:none;letter-spacing:0;font-weight:400" title="Hovering picks the nearest cell that has a stored thumbnail (within 14 px)"><input type="checkbox" id="snapT" checked>snap to cells with thumbnails</label></h2>
+    <div id="hoverBox"><canvas id="hoverCv" width="168" height="168"></canvas><div id="hoverInfo" class="small">Hover over a point in the plot.</div></div></section>
+  <section><h2>Populations<span class="sp"></span><span class="small" id="popNote"></span></h2><ul class="tree" id="tree"></ul>
+    <div class="small" style="margin-top:6px">Click a population to plot its cells and gate inside it. Gates are kept in this browser and can be saved as JSON.</div></section>
+  <section><h2>Counts per sample<span class="sp"></span><select id="statMode"><option value="pp">% parent</option><option value="pt">% all cells</option><option value="n">count</option></select><button id="bStats" title="CSV with counts and percentages">CSV</button></h2>
+    <div class="tablewrap"><table id="stats"></table></div><div id="capNote"></div></section>
+  <section><h2>Mean expression<span class="sp"></span></h2>
+    <div class="row"><label>rows</label><select id="heatBy"></select></div>
+    <div class="row"><label>markers</label><select id="heatGrp"></select></div>
+    <div class="small">Mean asinh value; colours scaled per marker (column) across rows. Uses the shown samples.</div>
+    <div class="tablewrap" style="max-height:420px;margin-top:6px"><table id="heat"></table></div></section>
+</aside>
+</div>
+<div id="help">
+  <h3>vollmilch viewer</h3>
+  <p><b>Gating.</b> Choose X and Y, pick <i>Rectangle gate</i> or <i>Polygon gate</i>, and draw. A new gate is a child of the population currently shown (breadcrumb, top right). Click a population on the right to show its cells and gate further inside it. Rectangle edges dragged onto the plot border are open-ended.</p>
+  <p>Gates on UMAP axes work, but only cells that were part of the embedding have UMAP coordinates.</p>
+  <p><b>Cells.</b> In <i>Select</i> mode click a point to inspect it or drag a box to show the cells in it (only cells with stored thumbnails can be shown). Click a tile to highlight that cell in the plot.</p>
+  <p><b>Thumbnails.</b> Switch channels on/off, choose colours and set the black (left) and white (right) points. Outlines show the nucleus and the cell of the centred object.</p>
+  <p><b>Saving.</b> Gates are stored in this browser automatically. <i>Save gates</i> downloads a JSON that you can share, load into another copy of this report, or apply to <i>all</i> cells and send to QuPath:</p>
+  <p><span class="kbd">vollmilch export config.yaml gates.json</span></p>
+  <p><b>Keys:</b> <span class="kbd">Esc</span> cancel polygon · <span class="kbd">Enter</span> close polygon</p>
+  <p class="small" id="helpMeta"></p>
+  <button onclick="document.getElementById('help').style.display='none'">Close</button>
+</div>
+<script id="manifest" type="application/json">/*__MANIFEST__*/null</script>
+<script id="blob-data" type="application/octet-stream">__DATA_B64__</script>
+<script id="blob-thumbs" type="application/octet-stream">__THUMBS_B64__</script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const M = JSON.parse($("manifest").textContent);
+const N = M.n;
+const CAT_PAL = ["#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf","#aec7e8","#ffbb78","#98df8a","#ff9896","#c5b0d5","#c49c94","#f7b6d2","#c7c7c7","#dbdb8d","#9edae5"];
+const POP_PAL = ["#e6194b","#3cb44b","#4363d8","#f58231","#911eb4","#42d4f4","#f032e6","#9a6324","#469990","#800000","#808000","#000075","#bfef45","#fabed4","#dcbeff","#ffd8b1"];
+const VIR = ["#440154","#482878","#3e4989","#31688e","#26828e","#1f9e89","#35b779","#6ece58","#b5de2b","#fde725"];
+const hex2rgb = h => { h = h.replace("#",""); if (h.length===3) h = h.split("").map(c=>c+c).join(""); const v = parseInt(h,16); return [(v>>16)&255,(v>>8)&255,v&255]; };
+const VIR_LUT = (() => { const s = VIR.map(hex2rgb), out = new Uint8Array(256*3); for (let i=0;i<256;i++){ const t=i/255*(s.length-1), k=Math.min(s.length-2,Math.floor(t)), f=t-k; for (let c=0;c<3;c++) out[i*3+c]=Math.round(s[k][c]*(1-f)+s[k+1][c]*f);} return out; })();
+const fmt = v => { if (!isFinite(v)) return "NA"; const a=Math.abs(v); if (a!==0 && (a<1e-3||a>=1e5)) return v.toExponential(2); return +v.toPrecision(4) + ""; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// ------------------------------------------------------------------ data decoding
+function b64ToBytes(s) {
+  if (Uint8Array.fromBase64) return Uint8Array.fromBase64(s);
+  const CH = 1 << 22, out = new Uint8Array(Math.floor(s.length * 3 / 4)); let o = 0;
+  for (let i = 0; i < s.length; i += CH) { const bin = atob(s.slice(i, i + CH)); for (let j = 0; j < bin.length; j++) out[o++] = bin.charCodeAt(j); }
+  return out.subarray(0, o);
+}
+async function gunzip(u8) { const st = new Blob([u8]).stream().pipeThrough(new DecompressionStream("gzip")); return await new Response(st).arrayBuffer(); }
+const TA = {float32: Float32Array, uint16: Uint16Array, uint32: Uint32Array, uint8: Uint8Array, int32: Int32Array};
+const view = (buf, e) => new TA[e.dtype](buf, e.offset, e.length);
+
+const cols = {}, colInfo = {}, cats = {};
+let objId, T = null, TO = null, thumbRows = null, thumbOfRow = null;
+
+// ------------------------------------------------------------------ state
+const S = {
+  x: null, y: null, logx: false, logy: false, full: false,
+  parent: null, colorBy: "cat:sample", size: 2, autoSize: true, alpha: 0.6,
+  samples: null, mode: "select", highlight: -1, hover: -1, panel: -1, selected: [],
+};
+let pops = [];             // {id,name,parent,x,y,logx,logy,type,vertices|x0..y1,color}
+let memb = new Map();      // id -> Uint8Array
+let ordered = [];          // DFS order with depth
+let deepest = null;        // Int16Array index into ordered (-1 none)
+let visible = null;        // Uint8Array plotted
+let sampleOn = null;       // Uint8Array per sample code
+let drawOrder = null;
+const LS_KEY = "vollmilch:" + M.report_id;
+
+// ------------------------------------------------------------------ gates (must match gating.py)
+function axisVals(key, log) {
+  const c = cols[key]; if (!c) return null;
+  if (!log) return c;
+  const out = new Float64Array(c.length);
+  for (let i = 0; i < c.length; i++) { const v = c[i]; out[i] = v > 0 ? Math.log10(v) : NaN; }
+  return out;
+}
+function gateTest(p) {
+  const X = axisVals(p.x, p.logx), Y = axisVals(p.y, p.logy);
+  if (!X || !Y) return null;
+  if (p.type === "rect") {
+    const x0 = p.x0, x1 = p.x1, y0 = p.y0, y1 = p.y1;
+    return i => { const x = X[i], y = Y[i]; if (!(isFinite(x) && isFinite(y))) return false;
+      if (x0 !== null && x0 !== undefined && !(x >= x0)) return false; if (x1 !== null && x1 !== undefined && !(x <= x1)) return false;
+      if (y0 !== null && y0 !== undefined && !(y >= y0)) return false; if (y1 !== null && y1 !== undefined && !(y <= y1)) return false; return true; };
+  }
+  const V = p.vertices, n = V.length;
+  return i => { const px = X[i], py = Y[i]; if (!(isFinite(px) && isFinite(py))) return false;
+    let inside = false;
+    for (let k = 0, j = n - 1; k < n; j = k++) { const xi = V[k][0], yi = V[k][1], xj = V[j][0], yj = V[j][1];
+      if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside; }
+    return inside; };
+}
+function treeOrder() {
+  const kids = new Map(); for (const p of pops) { const k = p.parent || null; if (!kids.has(k)) kids.set(k, []); kids.get(k).push(p); }
+  const out = []; const walk = (pid, d) => { for (const p of (kids.get(pid) || [])) { out.push({p, depth: d}); walk(p.id, d + 1); } };
+  walk(null, 0); return out;
+}
+function computeMembership() {
+  ordered = treeOrder(); memb = new Map();
+  for (const {p} of ordered) {
+    const par = p.parent ? memb.get(p.parent) : null, m = new Uint8Array(N), t = gateTest(p);
+    if (t) for (let i = 0; i < N; i++) if ((!par || par[i]) && t(i)) m[i] = 1;
+    p._missing = !t; memb.set(p.id, m);
+  }
+  deepest = new Int16Array(N).fill(-1); const bd = new Int16Array(N).fill(-1);
+  ordered.forEach(({p, depth}, k) => { const m = memb.get(p.id); for (let i = 0; i < N; i++) if (m[i] && depth > bd[i]) { deepest[i] = k; bd[i] = depth; } });
+}
+function popById(id) { return pops.find(p => p.id === id); }
+function popPath(p, sep = "/") { const parts = [p.name]; while (p.parent) { p = popById(p.parent); parts.push(p.name); } return parts.reverse().join(sep); }
+
+// ------------------------------------------------------------------ visibility
+function computeVisible() {
+  const sc = cats.sample.codes; visible = new Uint8Array(N);
+  const par = S.parent ? memb.get(S.parent) : null;
+  for (let i = 0; i < N; i++) if (sampleOn[sc[i]] && (!par || par[i])) visible[i] = 1;
+}
+
+// ------------------------------------------------------------------ plotting
+const plot = $("plot"), ov = $("overlay"), pctx = plot.getContext("2d"), octx = ov.getContext("2d");
+let W = 0, H = 0, DPR = 1;
+const MG = {l: 58, r: 14, t: 12, b: 42};
+let R = {x0: 0, x1: 1, y0: 0, y1: 1}, XV = null, YV = null, grid = null;
+const isSpatial = () => S.x === "x_um" && S.y === "y_um";
+
+function quant(sorted, q) { if (!sorted.length) return NaN; const p = (sorted.length - 1) * q, a = Math.floor(p), b = Math.ceil(p); return sorted[a] + (sorted[b] - sorted[a]) * (p - a); }
+function computeRange() {
+  XV = axisVals(S.x, S.logx); YV = axisVals(S.y, S.logy);
+  const xs = [], ys = []; let cnt = 0; for (let i = 0; i < N; i++) if (visible[i]) cnt++;
+  const step = Math.max(1, Math.floor(cnt / 60000)); let k = 0;
+  for (let i = 0; i < N; i++) if (visible[i]) { if ((k++ % step) === 0) { const x = XV[i], y = YV[i]; if (isFinite(x) && isFinite(y)) { xs.push(x); ys.push(y); } } }
+  xs.sort((a, b) => a - b); ys.sort((a, b) => a - b);
+  const q = (S.full || isSpatial()) ? 0 : 0.001;
+  let x0 = quant(xs, q), x1 = quant(xs, 1 - q), y0 = quant(ys, q), y1 = quant(ys, 1 - q);
+  if (!isFinite(x0)) { x0 = 0; x1 = 1; } if (!isFinite(y0)) { y0 = 0; y1 = 1; }
+  if (x1 <= x0) { x0 -= 0.5; x1 += 0.5; } if (y1 <= y0) { y0 -= 0.5; y1 += 0.5; }
+  const px = (x1 - x0) * 0.04, py = (y1 - y0) * 0.04; x0 -= px; x1 += px; y0 -= py; y1 += py;
+  if (isSpatial()) { // equal aspect
+    const pw = W - MG.l - MG.r, ph = H - MG.t - MG.b, ux = (x1 - x0) / pw, uy = (y1 - y0) / ph, u = Math.max(ux, uy);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2; x0 = cx - u * pw / 2; x1 = cx + u * pw / 2; y0 = cy - u * ph / 2; y1 = cy + u * ph / 2;
+  }
+  R = {x0, x1, y0, y1};
+}
+const sx = v => MG.l + (v - R.x0) / (R.x1 - R.x0) * (W - MG.l - MG.r);
+const sy = v => isSpatial() ? MG.t + (v - R.y0) / (R.y1 - R.y0) * (H - MG.t - MG.b) : H - MG.b - (v - R.y0) / (R.y1 - R.y0) * (H - MG.t - MG.b);
+const dx = s => R.x0 + (s - MG.l) / (W - MG.l - MG.r) * (R.x1 - R.x0);
+const dy = s => isSpatial() ? R.y0 + (s - MG.t) / (H - MG.t - MG.b) * (R.y1 - R.y0) : R.y0 + (H - MG.b - s) / (H - MG.t - MG.b) * (R.y1 - R.y0);
+
+let colR, colG, colB, colorScale = null;
+function computeColors() {
+  colR = new Uint8Array(N); colG = new Uint8Array(N); colB = new Uint8Array(N); colorScale = null;
+  const cb = S.colorBy; const lg = $("legend"); let html = "";
+  const setAll = (r, g, b) => { colR.fill(r); colG.fill(g); colB.fill(b); };
+  if (cb.startsWith("cat:")) {
+    const c = cats[cb.slice(4)]; const pal = c.levels.map((_, k) => hex2rgb(CAT_PAL[k % CAT_PAL.length]));
+    for (let i = 0; i < N; i++) { const p = pal[c.codes[i]]; colR[i] = p[0]; colG[i] = p[1]; colB[i] = p[2]; }
+    html = c.levels.slice(0, 60).map((l, k) => `<div class="chk"><span class="sw" style="background:${CAT_PAL[k % CAT_PAL.length]}"></span>${esc(l)}</div>`).join("") + (c.levels.length > 60 ? `<div class="small">… ${c.levels.length - 60} more</div>` : "");
+  } else if (cb === "pop") {
+    setAll(190, 194, 202);
+    const pal = ordered.map(({p}) => hex2rgb(p.color));
+    for (let i = 0; i < N; i++) { const k = deepest[i]; if (k >= 0) { colR[i] = pal[k][0]; colG[i] = pal[k][1]; colB[i] = pal[k][2]; } }
+    html = `<div class="chk"><span class="sw" style="background:#bec2ca"></span>not gated</div>` + ordered.map(({p, depth}) => `<div class="chk" style="padding-left:${depth * 10}px"><span class="sw" style="background:${p.color}"></span>${esc(p.name)}</div>`).join("");
+  } else {
+    const key = cb.slice(4), c = cols[key]; const v = [];
+    for (let i = 0; i < N; i += Math.max(1, Math.floor(N / 50000))) if (isFinite(c[i])) v.push(c[i]);
+    v.sort((a, b) => a - b); const lo = quant(v, 0.01), hi = quant(v, 0.99), d = (hi - lo) || 1;
+    for (let i = 0; i < N; i++) { const x = c[i]; if (!isFinite(x)) { colR[i] = colG[i] = colB[i] = 200; continue; }
+      const k = Math.max(0, Math.min(255, Math.round((x - lo) / d * 255))) * 3; colR[i] = VIR_LUT[k]; colG[i] = VIR_LUT[k + 1]; colB[i] = VIR_LUT[k + 2]; }
+    colorScale = {lo, hi};
+    html = `<div style="height:10px;border-radius:3px;background:linear-gradient(90deg,${VIR.join(",")})"></div><div class="row small"><span>${fmt(lo)}</span><span style="flex:1"></span><span>${fmt(hi)}</span></div><div class="small">1st–99th percentile</div>`;
+  }
+  lg.innerHTML = html;
+}
+
+function niceTicks(a, b, n = 6) {
+  const span = b - a, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0))), r = step0 / mag;
+  const step = (r < 1.5 ? 1 : r < 3 ? 2 : r < 7 ? 5 : 10) * mag; const out = [];
+  for (let v = Math.ceil(a / step) * step; v <= b + 1e-12; v += step) out.push(+v.toFixed(12)); return out;
+}
+function render() {
+  const rect = plot.getBoundingClientRect(); DPR = window.devicePixelRatio || 1;
+  W = rect.width; H = rect.height; if (W < 10 || H < 10) return;
+  for (const c of [plot, ov]) { c.width = Math.round(W * DPR); c.height = Math.round(H * DPR); }
+  computeRange();
+  const w = plot.width, h = plot.height, img = pctx.createImageData(w, h), d = img.data;
+  for (let i = 0; i < d.length; i += 4) { d[i] = d[i + 1] = d[i + 2] = 255; d[i + 3] = 255; }
+  // dot size: manual, or automatic from the number of cells plotted and the plot area
+  if (S.autoSize) {
+    let cnt = 0; for (let i = 0; i < N; i++) if (visible[i] && isFinite(XV[i]) && isFinite(YV[i])) cnt++;
+    const area = (W - MG.l - MG.r) * (H - MG.t - MG.b);
+    S.size = Math.max(1.5, Math.min(12, Math.round(2 * 0.45 * Math.sqrt(area / Math.max(cnt, 1))) / 2));
+    $("ptSize").value = S.size;
+  }
+  $("ptSizeV").textContent = S.size + " px";
+  const s = Math.max(1, Math.round(S.size * DPR)), a = S.alpha, half = Math.floor(s / 2);
+  // round dot stamp (offsets inside a disc of diameter s)
+  const mdx = [], mdy = [], c0 = (s - 1) / 2, r2 = (s / 2) ** 2 + (s > 3 ? 0.25 : 1);
+  for (let yy = 0; yy < s; yy++) for (let xx = 0; xx < s; xx++) if ((xx - c0) ** 2 + (yy - c0) ** 2 <= r2) { mdx.push(xx); mdy.push(yy); }
+  const nm = mdx.length;
+  const gx0 = Math.round(MG.l * DPR), gx1 = Math.round((W - MG.r) * DPR), gy0 = Math.round(MG.t * DPR), gy1 = Math.round((H - MG.b) * DPR);
+  const GS = 6, gw = Math.ceil(W / GS) + 1, gh = Math.ceil(H / GS) + 1;
+  const head = new Int32Array(gw * gh).fill(-1), next = new Int32Array(N).fill(-1);
+  let shown = 0;
+  for (let k = 0; k < N; k++) {
+    const i = drawOrder[k]; if (!visible[i]) continue;
+    const x = XV[i], y = YV[i]; if (!(isFinite(x) && isFinite(y))) continue;
+    const X = sx(x), Y = sy(y); const px = Math.round(X * DPR) - half, py = Math.round(Y * DPR) - half;
+    if (px + s <= gx0 || px >= gx1 || py + s <= gy0 || py >= gy1) continue;
+    shown++;
+    const r = colR[i], g = colG[i], b = colB[i];
+    for (let m = 0; m < nm; m++) {
+      const xx = px + mdx[m], yy = py + mdy[m];
+      if (xx < gx0 || xx >= gx1 || yy < gy0 || yy >= gy1) continue;
+      const o = (yy * w + xx) * 4;
+      d[o] += (r - d[o]) * a; d[o + 1] += (g - d[o + 1]) * a; d[o + 2] += (b - d[o + 2]) * a;
+    }
+    const cx = Math.floor(X / GS), cy = Math.floor(Y / GS), gi = cy * gw + cx; next[i] = head[gi]; head[gi] = i;
+  }
+  pctx.putImageData(img, 0, 0);
+  grid = {head, next, gw, gh, GS};
+  // axes
+  pctx.save(); pctx.scale(DPR, DPR);
+  pctx.strokeStyle = "#9aa1ad"; pctx.lineWidth = 1; pctx.strokeRect(MG.l + .5, MG.t + .5, W - MG.l - MG.r, H - MG.t - MG.b);
+  pctx.fillStyle = "#4a5160"; pctx.font = "11px system-ui,sans-serif";
+  pctx.textAlign = "center"; pctx.textBaseline = "top";
+  for (const t of niceTicks(R.x0, R.x1)) { const X = sx(t); pctx.fillRect(X, H - MG.b, 1, 4); pctx.fillText(fmt(S.logx ? Math.pow(10, t) : t), X, H - MG.b + 6); }
+  pctx.textAlign = "right"; pctx.textBaseline = "middle";
+  for (const t of niceTicks(R.y0, R.y1)) { const Y = sy(t); pctx.fillRect(MG.l - 4, Y, 4, 1); pctx.fillText(fmt(S.logy ? Math.pow(10, t) : t), MG.l - 6, Y); }
+  pctx.font = "12px system-ui,sans-serif"; pctx.fillStyle = "#1d2330"; pctx.textAlign = "center"; pctx.textBaseline = "bottom";
+  pctx.fillText(axisLabel(S.x, S.logx), MG.l + (W - MG.l - MG.r) / 2, H - 4);
+  pctx.save(); pctx.translate(13, MG.t + (H - MG.t - MG.b) / 2); pctx.rotate(-Math.PI / 2); pctx.textBaseline = "middle"; pctx.fillText(axisLabel(S.y, S.logy), 0, 0); pctx.restore();
+  pctx.textAlign = "right"; pctx.textBaseline = "top"; pctx.fillStyle = "#6b7385"; pctx.font = "11px system-ui,sans-serif";
+  pctx.fillText(`${shown.toLocaleString()} cells plotted`, W - MG.r - 4, MG.t + 4);
+  pctx.restore();
+  drawOverlay();
+}
+function axisLabel(key, log) { const c = colInfo[key]; if (!c) return key; let s;
+  if (c.group.startsWith("Markers")) s = `${c.label} · ${c.group.replace("Markers: ", "")}`;
+  else if (c.group === "Embedding") s = c.label; else if (c.group === "Position") s = key === "x_um" ? "x (µm)" : "y (µm)"; else s = `${c.group}: ${c.label}`;
+  return log ? `log10 ${s}` : s; }
+
+// ------------------------------------------------------------------ overlay: gates, drawing, highlight
+let draft = null; // {type:"rect", a:[sx,sy], b:[sx,sy]} | {type:"poly", pts:[[dx,dy]...], cur:[sx,sy]} | {type:"box",...}
+function gatesForView() { return pops.filter(p => (p.parent || null) === (S.parent || null) && p.x === S.x && p.y === S.y && !!p.logx === S.logx && !!p.logy === S.logy); }
+function drawOverlay() {
+  octx.setTransform(DPR, 0, 0, DPR, 0, 0); octx.clearRect(0, 0, W, H);
+  octx.save(); octx.beginPath(); octx.rect(MG.l, MG.t, W - MG.l - MG.r, H - MG.t - MG.b); octx.clip();
+  octx.lineWidth = 1.6; octx.font = "600 12px system-ui,sans-serif";
+  for (const p of gatesForView()) {
+    octx.strokeStyle = p.color; octx.fillStyle = p.color + "18"; octx.beginPath();
+    let lx, ly;
+    if (p.type === "rect") {
+      const X0 = p.x0 == null ? MG.l - 5 : sx(p.x0), X1 = p.x1 == null ? W - MG.r + 5 : sx(p.x1);
+      const Ya = p.y0 == null ? (isSpatial() ? MG.t - 5 : H - MG.b + 5) : sy(p.y0), Yb = p.y1 == null ? (isSpatial() ? H - MG.b + 5 : MG.t - 5) : sy(p.y1);
+      octx.rect(Math.min(X0, X1), Math.min(Ya, Yb), Math.abs(X1 - X0), Math.abs(Yb - Ya)); lx = Math.max(Math.min(X0, X1), MG.l) + 4; ly = Math.max(Math.min(Ya, Yb), MG.t) + 4;
+    } else {
+      p.vertices.forEach((v, k) => { const X = sx(v[0]), Y = sy(v[1]); k ? octx.lineTo(X, Y) : octx.moveTo(X, Y); }); octx.closePath();
+      lx = Math.min(...p.vertices.map(v => sx(v[0]))); ly = Math.min(...p.vertices.map(v => sy(v[1]))) - 2;
+    }
+    octx.fill(); octx.stroke();
+    const m = memb.get(p.id); let n = 0; if (m) for (let i = 0; i < N; i++) if (m[i] && sampleOn[cats.sample.codes[i]]) n++;
+    const txt = `${p.name}  ${n.toLocaleString()}`; octx.textBaseline = "top"; octx.textAlign = "left";
+    const tw = octx.measureText(txt).width; octx.fillStyle = "rgba(255,255,255,.85)"; octx.fillRect(lx - 2, ly - 1, tw + 4, 15); octx.fillStyle = p.color; octx.fillText(txt, lx, ly);
+  }
+  if (draft) {
+    octx.strokeStyle = "#111"; octx.setLineDash([5, 4]); octx.lineWidth = 1.2; octx.beginPath();
+    if (draft.type === "rect" || draft.type === "box") { const [ax, ay] = draft.a, [bx, by] = draft.b; octx.rect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)); }
+    else if (draft.type === "poly") { draft.pts.forEach((v, k) => { const X = sx(v[0]), Y = sy(v[1]); k ? octx.lineTo(X, Y) : octx.moveTo(X, Y); }); if (draft.cur) octx.lineTo(draft.cur[0], draft.cur[1]);
+      for (const v of draft.pts) { octx.fillStyle = "#111"; octx.fillRect(sx(v[0]) - 2, sy(v[1]) - 2, 4, 4); } }
+    octx.stroke(); octx.setLineDash([]);
+  }
+  octx.restore();
+  const hv = S.hover;
+  if (hv >= 0 && hv !== S.highlight && XV && isFinite(XV[hv]) && isFinite(YV[hv])) {
+    octx.strokeStyle = "#111"; octx.lineWidth = 1.5; octx.beginPath(); octx.arc(sx(XV[hv]), sy(YV[hv]), Math.max(5, S.size / 2 + 3), 0, 2 * Math.PI); octx.stroke();
+  }
+  const hl = S.highlight;
+  if (hl >= 0 && XV && isFinite(XV[hl]) && isFinite(YV[hl])) {
+    const X = sx(XV[hl]), Y = sy(YV[hl]); octx.strokeStyle = "#000"; octx.lineWidth = 2; octx.beginPath(); octx.arc(X, Y, Math.max(7, S.size / 2 + 4), 0, 2 * Math.PI); octx.stroke();
+    octx.strokeStyle = "#ffd400"; octx.lineWidth = 1.2; octx.beginPath(); octx.arc(X, Y, Math.max(7, S.size / 2 + 4), 0, 2 * Math.PI); octx.stroke();
+  }
+}
+function nearest(mx, my, maxd = 9, ok = null) {
+  if (!grid) return -1; const {head, next, gw, gh, GS} = grid; let best = -1, bd = maxd * maxd;
+  const cx = Math.floor(mx / GS), cy = Math.floor(my / GS), r = Math.ceil(maxd / GS);
+  for (let yy = cy - r; yy <= cy + r; yy++) for (let xx = cx - r; xx <= cx + r; xx++) {
+    if (xx < 0 || yy < 0 || xx >= gw || yy >= gh) continue;
+    for (let i = head[yy * gw + xx]; i >= 0; i = next[i]) { if (ok && !ok(i)) continue; const d = (sx(XV[i]) - mx) ** 2 + (sy(YV[i]) - my) ** 2; if (d < bd) { bd = d; best = i; } }
+  }
+  return best;
+}
+const inPlot = (x, y) => x >= MG.l && x <= W - MG.r && y >= MG.t && y <= H - MG.b;
+const mpos = e => { const r = ov.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+let dragging = false;
+ov.addEventListener("mousedown", e => {
+  const [x, y] = mpos(e); if (e.button !== 0) return;
+  if (S.mode === "poly") return;
+  if (!inPlot(x, y)) return;
+  dragging = true; draft = {type: S.mode === "rect" ? "rect" : "box", a: [x, y], b: [x, y]};
+});
+window.addEventListener("mousemove", e => {
+  const [x, y] = mpos(e);
+  if (dragging && draft) { draft.b = [Math.max(MG.l, Math.min(W - MG.r, x)), Math.max(MG.t, Math.min(H - MG.b, y))]; drawOverlay(); return; }
+  if (S.mode === "poly" && draft && draft.type === "poly") { draft.cur = [x, y]; drawOverlay(); }
+});
+ov.addEventListener("mousemove", e => {
+  const [x, y] = mpos(e); const tt = $("tooltip");
+  if (dragging || !inPlot(x, y)) { tt.style.display = "none"; return; }
+  const snap = thumbOfRow && $("snapT").checked;
+  const i = snap ? nearest(x, y, 14, k => thumbOfRow[k] >= 0) : nearest(x, y);
+  if (i !== S.hover) { S.hover = i; drawOverlay(); if (i >= 0) renderHover(i); }
+  if (i < 0) { tt.style.display = "none"; return; }
+  tt.innerHTML = cellSummary(i, true); tt.style.display = "block";
+  const tw = tt.offsetWidth; tt.style.left = (x + 14 + tw > W ? x - tw - 10 : x + 14) + "px"; tt.style.top = Math.max(0, y - 10) + "px";
+});
+ov.addEventListener("mouseleave", () => { $("tooltip").style.display = "none"; if (S.hover >= 0) { S.hover = -1; drawOverlay(); } });
+window.addEventListener("mouseup", e => {
+  if (!dragging) return; dragging = false; const d = draft; draft = null;
+  const [ax, ay] = d.a, [bx, by] = d.b, small = Math.abs(bx - ax) < 3 && Math.abs(by - ay) < 3;
+  if (d.type === "box") {
+    if (small) { const i = nearest(ax, ay); S.highlight = i; drawOverlay(); if (i >= 0) { renderHover(i); showCells([i], `Cell ${cellName(i)}`); } return; }
+    const xa = dx(Math.min(ax, bx)), xb = dx(Math.max(ax, bx)), ya = Math.min(dy(ay), dy(by)), yb = Math.max(dy(ay), dy(by)); const sel = [];
+    for (let i = 0; i < N; i++) if (visible[i]) { const x = XV[i], y = YV[i]; if (x >= xa && x <= xb && y >= ya && y <= yb) sel.push(i); }
+    drawOverlay(); showCells(sel, `${sel.length.toLocaleString()} cells in box`); return;
+  }
+  if (small) { drawOverlay(); return; }
+  const E = 4, L = Math.min(ax, bx), Rr = Math.max(ax, bx), Tt = Math.min(ay, by), B = Math.max(ay, by);
+  const g = {type: "rect", x0: L <= MG.l + E ? null : dx(L), x1: Rr >= W - MG.r - E ? null : dx(Rr)};
+  const yTop = Tt <= MG.t + E ? null : dy(Tt), yBot = B >= H - MG.b - E ? null : dy(B);
+  if (isSpatial()) { g.y0 = yTop; g.y1 = yBot; } else { g.y0 = yBot; g.y1 = yTop; }
+  addGate(g);
+});
+ov.addEventListener("click", e => {
+  if (S.mode !== "poly") return; const [x, y] = mpos(e); if (!inPlot(x, y)) return;
+  if (!draft || draft.type !== "poly") draft = {type: "poly", pts: []};
+  const pts = draft.pts;
+  if (pts.length >= 3 && Math.hypot(sx(pts[0][0]) - x, sy(pts[0][1]) - y) < 9) { finishPoly(); return; }
+  const last = pts[pts.length - 1]; if (last && Math.hypot(sx(last[0]) - x, sy(last[1]) - y) < 3) return;
+  pts.push([dx(x), dy(y)]); drawOverlay();
+});
+ov.addEventListener("dblclick", e => { if (S.mode === "poly") { e.preventDefault(); finishPoly(); } });
+window.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" && e.target.type === "text") return;
+  if (e.key === "Escape") { draft = null; drawOverlay(); }
+  if (e.key === "Enter" && S.mode === "poly") finishPoly();
+});
+function finishPoly() { if (!draft || draft.type !== "poly" || draft.pts.length < 3) { return; } const v = draft.pts.slice(); draft = null; addGate({type: "polygon", vertices: v}); }
+
+function newId() { return "g" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function addGate(g) {
+  let name = $("gName").value.trim(); const names = new Set(pops.map(p => p.name));
+  if (!name) { let k = pops.length + 1; while (names.has("Gate " + k)) k++; name = "Gate " + k; }
+  if (names.has(name)) { let k = 2; while (names.has(`${name} ${k}`)) k++; name = `${name} ${k}`; }
+  const used = new Set(pops.map(p => p.color)); const color = POP_PAL.find(c => !used.has(c)) || POP_PAL[pops.length % POP_PAL.length];
+  pops.push({id: newId(), name, parent: S.parent || null, x: S.x, y: S.y, logx: S.logx, logy: S.logy, color, ...g});
+  $("gName").value = ""; changedGates();
+}
+function changedGates() {
+  computeMembership(); computeVisible(); if (S.colorBy === "pop") computeColors();
+  saveLocal(); render(); renderTree(); renderStats(); renderHeat();
+}
+
+// ------------------------------------------------------------------ cells, thumbnails, gallery
+function cellName(i) { return `${cats.sample.levels[cats.sample.codes[i]]}:${objId[i]}`; }
+function cellSummary(i, short) {
+  const k = deepest[i]; const pp = k >= 0 ? popPath(ordered[k].p) : "—";
+  const xv = cols[S.x] ? cols[S.x][i] : NaN, yv = cols[S.y] ? cols[S.y][i] : NaN;
+  const smp = M.samples.find(s => s.sample === cats.sample.levels[cats.sample.codes[i]]);
+  const pxs = smp ? smp.pixel_size_um : 1, xu = cols.x_um[i], yu = cols.y_um[i];
+  let s = `<b>${esc(cellName(i))}</b><br>${esc(colInfo[S.x] ? colInfo[S.x].label : S.x)}: ${fmt(xv)} · ${esc(colInfo[S.y] ? colInfo[S.y].label : S.y)}: ${fmt(yv)}<br>population: ${esc(pp)}`;
+  if (!short) s += `<br>position: ${fmt(xu)}, ${fmt(yu)} µm (pixel ${Math.round(xu / pxs)}, ${Math.round(yu / pxs)})`;
+  return s;
+}
+let galleryRows = [], galleryShown = 0;
+function showCells(rows, label) {
+  const withT = thumbOfRow ? rows.filter(i => thumbOfRow[i] >= 0) : [];
+  const n = +$("galN").value; let pick = withT;
+  if (withT.length > n) { pick = withT.slice(); for (let k = pick.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [pick[k], pick[j]] = [pick[j], pick[k]]; } pick = pick.slice(0, n); }
+  galleryRows = pick;
+  let info = `${label}`; if (rows.length === 1) info = cellSummary(rows[0]); else info += ` · ${withT.length.toLocaleString()} with thumbnails${withT.length > n ? `, showing ${n} at random` : ""}`;
+  if (!thumbOfRow) info += " · no thumbnails stored";
+  $("info").innerHTML = info; renderGallery();
+}
+const LUT = new Float32Array(256); for (let i = 0; i < 256; i++) LUT[i] = (i / 255) ** 2;
+let chanState = [];
+function renderThumb(t, ctx) {
+  const Sz = M.thumbs.size, C = M.thumbs.channels.length, P = Sz * Sz, img = ctx.createImageData(Sz, Sz), d = img.data;
+  const on = chanState.map((c, k) => ({...c, k})).filter(c => c.on), gam = +$("gamma").value || 1, om = +$("outSel").value;
+  for (let p = 0; p < P; p++) {
+    let r = 0, g = 0, b = 0;
+    for (const c of on) { let v = LUT[T[(t * C + c.k) * P + p]]; v = (v - c.min) / ((c.max - c.min) || 1e-6); if (v <= 0) continue; if (v > 1) v = 1; if (gam !== 1) v = Math.pow(v, 1 / gam); r += v * c.rgb[0]; g += v * c.rgb[1]; b += v * c.rgb[2]; }
+    const o = TO[t * P + p] & om;
+    if (o & 2) { r = 255; g = 255; b = 255; } if (o & 1) { r = 255; g = 220; b = 0; }
+    d[p * 4] = r; d[p * 4 + 1] = g; d[p * 4 + 2] = b; d[p * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+const tmpC = document.createElement("canvas");
+const hoverTmp = document.createElement("canvas");
+function markerKey(ch) { for (const k of [`${ch}:cell:mean`, `${ch}:nucleus:mean`]) if (cols[k]) return k; const c = M.columns.find(c => c.marker === ch); return c ? c.key : null; }
+function renderHover(i) {
+  if (i === undefined) i = S.panel; if (i < 0) return; S.panel = i;
+  const cv = $("hoverCv"), ctx = cv.getContext("2d"); ctx.fillStyle = "#14171d"; ctx.fillRect(0, 0, cv.width, cv.height);
+  const t = thumbOfRow ? thumbOfRow[i] : -1;
+  if (t >= 0) { const Sz = M.thumbs.size; hoverTmp.width = hoverTmp.height = Sz; renderThumb(t, hoverTmp.getContext("2d")); ctx.imageSmoothingEnabled = false; ctx.drawImage(hoverTmp, 0, 0, cv.width, cv.height); }
+  else { ctx.fillStyle = "#8a90a0"; ctx.font = "12px system-ui,sans-serif"; ctx.textAlign = "center"; ctx.fillText("no thumbnail stored", cv.width / 2, cv.height / 2); }
+  const k = deepest[i], pop = k >= 0 ? ordered[k].p : null;
+  const xu = cols.x_um[i], yu = cols.y_um[i], smp = M.samples.find(s => s.sample === cats.sample.levels[cats.sample.codes[i]]), pxs = smp ? smp.pixel_size_um : 1;
+  let h = `<b>${esc(cellName(i))}</b><div>${pop ? `<span class="sw" style="background:${pop.color}"></span> ${esc(popPath(pop))}` : "not gated"}</div>`;
+  h += `<div class="small">${esc(colInfo[S.x] ? colInfo[S.x].label : S.x)}: ${fmt(cols[S.x] ? cols[S.x][i] : NaN)}<br>${esc(colInfo[S.y] ? colInfo[S.y].label : S.y)}: ${fmt(cols[S.y] ? cols[S.y][i] : NaN)}<br>pixel ${Math.round(xu / pxs)}, ${Math.round(yu / pxs)}</div>`;
+  if (M.thumbs) {
+    const rows = chanState.map(c => { const key = markerKey(c.name); return key ? `<tr><td><span class="sw" style="background:${c.on ? c.color : "transparent"}"></span> ${esc(c.name)}</td><td>${fmt(cols[key][i])}</td></tr>` : ""; }).join("");
+    if (rows) h += `<table title="asinh-transformed mean intensity (cell, or nucleus in nuclei mode)">${rows}</table>`;
+  }
+  $("hoverInfo").innerHTML = h;
+}
+function renderGallery() {
+  const gal = $("gallery"); gal.innerHTML = ""; if (!thumbOfRow) return;
+  const Sz = M.thumbs.size, ts = +$("tileSel").value; tmpC.width = tmpC.height = Sz; const tctx = tmpC.getContext("2d");
+  for (const i of galleryRows) {
+    const div = document.createElement("div"); div.className = "tile" + (i === S.highlight ? " sel" : ""); div.title = cellName(i);
+    const c = document.createElement("canvas"); c.width = c.height = ts; const ctx = c.getContext("2d");
+    renderThumb(thumbOfRow[i], tctx); ctx.imageSmoothingEnabled = false; ctx.drawImage(tmpC, 0, 0, ts, ts);
+    const k = deepest[i]; const lab = document.createElement("span"); lab.textContent = k >= 0 ? ordered[k].p.name : ""; if (k >= 0) lab.style.borderLeft = `3px solid ${ordered[k].p.color}`;
+    div.append(c); if (lab.textContent) div.append(lab);
+    div.onmouseenter = () => renderHover(i);
+    div.onclick = () => { S.highlight = i; drawOverlay(); renderHover(i); $("info").innerHTML = cellSummary(i); for (const t of gal.children) t.classList.remove("sel"); div.classList.add("sel"); };
+    gal.append(div);
+  }
+  renderHover();
+}
+function buildChannelUI() {
+  if (!M.thumbs) { $("thumbSec").innerHTML = '<h2>Thumbnails</h2><div class="small">No thumbnails in this report (set thumbnails.channels in the config).</div>'; return; }
+  chanState = M.thumbs.channels.map((c, k) => ({name: c, on: true, color: M.thumbs.colors[k] || "#ffffff", rgb: hex2rgb(M.thumbs.colors[k] || "#ffffff"), min: 0, max: 1}));
+  const box = $("chans"); box.innerHTML = "";
+  chanState.forEach((c, k) => {
+    const el = document.createElement("div"); el.className = "chrow";
+    el.innerHTML = `<input type="checkbox" ${c.on ? "checked" : ""}><span>${esc(c.name)}</span><input type="color" value="${c.color}">
+      <div class="rng"><input type="range" min="0" max="1" step="0.005" value="0" title="black point"><input type="range" min="0" max="1" step="0.005" value="1" title="white point"></div>`;
+    const [cb, , col] = el.children, [lo, hi] = el.querySelectorAll(".rng input");
+    cb.onchange = () => { c.on = cb.checked; renderGallery(); };
+    col.oninput = () => { c.color = col.value; c.rgb = hex2rgb(col.value); renderGallery(); };
+    lo.oninput = () => { c.min = +lo.value; renderGallery(); }; hi.oninput = () => { c.max = +hi.value; renderGallery(); };
+    box.append(el);
+  });
+  $("chans").insertAdjacentHTML("beforeend", `<div class="small" style="margin-top:6px">${M.thumbs.size} px ≈ ${fmt(M.thumbs.size_um)} µm; ${M.thumbs.n.toLocaleString()} cells with thumbnails</div>`);
+}
+
+// ------------------------------------------------------------------ populations panel, stats, heatmap
+function renderTree() {
+  const ul = $("tree"); ul.innerHTML = "";
+  const counts = new Map(); const sc = cats.sample.codes; let all = 0; for (let i = 0; i < N; i++) if (sampleOn[sc[i]]) all++;
+  for (const {p} of ordered) { const m = memb.get(p.id); let n = 0; for (let i = 0; i < N; i++) if (m[i] && sampleOn[sc[i]]) n++; counts.set(p.id, n); }
+  const mk = (p, depth) => {
+    const li = document.createElement("li"); const n = p ? counts.get(p.id) : all; const pn = p ? (p.parent ? counts.get(p.parent) : all) : all;
+    li.className = "pop" + ((p ? p.id : null) === (S.parent || null) ? " cur" : ""); li.style.paddingLeft = (4 + depth * 14) + "px";
+    li.innerHTML = p ? `<input type="color" value="${p.color}" title="colour"><span class="nm" title="${esc(popPath(p))}${p._missing ? " (feature missing in this report)" : ""}">${esc(p.name)}${p._missing ? " ⚠" : ""}</span><span class="n">${n.toLocaleString()} · ${pn ? (100 * n / pn).toFixed(1) : "0"}%</span><span class="acts"><button title="plot the axes this gate was drawn on">axes</button><button title="rename">✎</button><button title="delete (with sub-populations)">×</button></span>`
+      : `<span class="sw" style="background:#bec2ca"></span><span class="nm"><b>All cells</b></span><span class="n">${n.toLocaleString()}</span><span></span>`;
+    li.onclick = ev => { if (ev.target.tagName === "BUTTON" || ev.target.tagName === "INPUT") return; setParent(p ? p.id : null); };
+    if (p) {
+      const [col, , , acts] = li.children, [bAx, bRen, bDel] = acts.children;
+      col.oninput = () => { p.color = col.value; if (S.colorBy === "pop") computeColors(); saveLocal(); render(); };
+      col.onchange = () => renderTree();
+      bAx.onclick = () => { setParent(p.parent || null, false); setAxes(p.x, p.y, p.logx, p.logy); };
+      bRen.onclick = () => { const nm = prompt("Population name", p.name); if (nm && nm.trim() && !pops.some(q => q !== p && q.name === nm.trim())) { p.name = nm.trim(); changedGates(); } };
+      bDel.onclick = () => { const kill = new Set([p.id]); let grew = true; while (grew) { grew = false; for (const q of pops) if (q.parent && kill.has(q.parent) && !kill.has(q.id)) { kill.add(q.id); grew = true; } }
+        if (kill.size > 1 && !confirm(`Delete ${p.name} and ${kill.size - 1} sub-population(s)?`)) return;
+        pops = pops.filter(q => !kill.has(q.id)); if (S.parent && kill.has(S.parent)) S.parent = p.parent || null; changedGates(); renderCrumbs(); };
+    }
+    ul.append(li);
+  };
+  mk(null, 0); for (const {p, depth} of ordered) mk(p, depth + 1);
+  $("popNote").textContent = pops.length ? `${pops.length} gate${pops.length > 1 ? "s" : ""}` : "";
+}
+function setParent(id, rerender = true) { S.parent = id; computeVisible(); renderCrumbs(); renderTree(); if (rerender) { render(); renderHeat(); } }
+function renderCrumbs() {
+  const c = $("crumbs"); const chain = []; let p = S.parent ? popById(S.parent) : null; while (p) { chain.unshift(p); p = p.parent ? popById(p.parent) : null; }
+  c.innerHTML = "<span class='small'>showing</span> "; const a = document.createElement(chain.length ? "a" : "b"); a.textContent = "All cells"; if (chain.length) a.onclick = () => setParent(null); c.append(a);
+  chain.forEach((q, k) => { c.append(" › "); const el = document.createElement(k === chain.length - 1 ? "b" : "a"); el.textContent = q.name; if (k < chain.length - 1) el.onclick = () => setParent(q.id); c.append(el); });
+}
+function statsData() {
+  const sc = cats.sample.codes, L = cats.sample.levels, ns = L.length; const tot = new Int32Array(ns); for (let i = 0; i < N; i++) tot[sc[i]]++;
+  const per = new Map(); for (const {p} of ordered) { const m = memb.get(p.id), a = new Int32Array(ns); for (let i = 0; i < N; i++) if (m[i]) a[sc[i]]++; per.set(p.id, a); }
+  return {L, tot, per};
+}
+function renderStats() {
+  const {L, tot, per} = statsData(), mode = $("statMode").value; const on = L.map((_, k) => sampleOn[k]);
+  const idx = L.map((_, k) => k).filter(k => on[k]);
+  const sum = a => idx.reduce((s, k) => s + a[k], 0);
+  const cell = (n, parent, total) => mode === "n" ? n.toLocaleString() : (mode === "pp" ? (parent ? (100 * n / parent).toFixed(1) : "–") : (total ? (100 * n / total).toFixed(2) : "–"));
+  let h = `<tr><th>population</th><th>all shown</th>${idx.map(k => `<th title="${esc(L[k])}">${esc(L[k].length > 14 ? L[k].slice(0, 13) + "…" : L[k])}</th>`).join("")}</tr>`;
+  h += `<tr><td>All cells</td><td>${sum(tot).toLocaleString()}</td>${idx.map(k => `<td>${tot[k].toLocaleString()}</td>`).join("")}</tr>`;
+  for (const {p, depth} of ordered) {
+    const a = per.get(p.id), pa = p.parent ? per.get(p.parent) : tot;
+    h += `<tr><td style="padding-left:${5 + depth * 10}px"><span class="sw" style="background:${p.color}"></span> ${esc(p.name)}</td><td>${cell(sum(a), sum(pa), sum(tot))}</td>${idx.map(k => `<td>${cell(a[k], pa[k], tot[k])}</td>`).join("")}</tr>`;
+  }
+  $("stats").innerHTML = h;
+  const capped = M.samples.filter(s => s.n_shown < s.n_total);
+  $("capNote").innerHTML = capped.length ? `<div class="note">This report holds a random subset of cells for ${capped.length} sample(s) (${M.n.toLocaleString()} of ${M.n_total.toLocaleString()} cells). Percentages are estimates; <span class="kbd">vollmilch export</span> applies the gates to all cells.</div>` : "";
+}
+function statsCSV() {
+  const {L, tot, per} = statsData(); const rows = [["population", "path", "sample", "count", "parent_count", "pct_parent", "sample_total", "pct_total"]];
+  for (const {p} of ordered) { const a = per.get(p.id), pa = p.parent ? per.get(p.parent) : tot;
+    L.forEach((s, k) => rows.push([p.name, popPath(p), s, a[k], pa[k], pa[k] ? (100 * a[k] / pa[k]).toFixed(3) : "", tot[k], tot[k] ? (100 * a[k] / tot[k]).toFixed(3) : ""])); }
+  download(rows.map(r => r.map(csvq).join(",")).join("\n"), `${M.title}_population_counts.csv`, "text/csv");
+}
+const csvq = v => { v = String(v); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+function renderHeat() {
+  const by = $("heatBy").value, grp = $("heatGrp").value; if (!by || !grp) return;
+  const keys = M.columns.filter(c => c.group === grp).map(c => c.key);
+  let codes, levels, colorsL;
+  if (by === "pop") { levels = ordered.map(({p}) => popPath(p)); codes = deepest; colorsL = ordered.map(({p}) => p.color); }
+  else { const c = cats[by.slice(4)]; levels = c.levels; codes = c.codes; colorsL = levels.map((_, k) => CAT_PAL[k % CAT_PAL.length]); }
+  const G = levels.length; if (!G) { $("heat").innerHTML = "<tr><td class='small'>No gates yet.</td></tr>"; return; }
+  const sums = keys.map(() => new Float64Array(G)), cnt = new Int32Array(G), sc = cats.sample.codes;
+  for (let i = 0; i < N; i++) { const g = codes[i]; if (g < 0 || !visible[i]) continue; cnt[g]++; keys.forEach((k, j) => { const v = cols[k][i]; if (isFinite(v)) sums[j][g] += v; }); }
+  const rowsK = []; for (let g = 0; g < G; g++) if (cnt[g] > 0) rowsK.push(g);
+  const means = keys.map((_, j) => rowsK.map(g => sums[j][g] / cnt[g]));
+  let h = `<tr><th></th><th>n</th>${keys.map(k => `<th class="vert">${esc(colInfo[k].label)}</th>`).join("")}</tr>`;
+  rowsK.slice(0, 80).forEach((g, r) => {
+    h += `<tr><td><span class="sw" style="background:${colorsL[g]}"></span> ${esc(levels[g])}</td><td>${cnt[g].toLocaleString()}</td>`;
+    keys.forEach((k, j) => { const col = means[j], lo = Math.min(...col), hi = Math.max(...col), v = col[r]; const t = hi > lo ? (v - lo) / (hi - lo) : 0.5; const q = Math.round(t * 255) * 3;
+      h += `<td class="v" title="${esc(colInfo[k].label)}: ${fmt(v)}" style="background:rgb(${VIR_LUT[q]},${VIR_LUT[q + 1]},${VIR_LUT[q + 2]})"></td>`; });
+    h += "</tr>";
+  });
+  $("heat").innerHTML = h;
+}
+
+// ------------------------------------------------------------------ persistence
+function gatesJSON() { return {format: "vollmilch-gates", version: 1, report_id: M.report_id, report_title: M.title, saved: new Date().toISOString(),
+  populations: pops.map(p => { const o = {id: p.id, name: p.name, parent: p.parent || null, x: p.x, y: p.y, logx: !!p.logx, logy: !!p.logy, type: p.type, color: p.color};
+    if (p.type === "rect") Object.assign(o, {x0: p.x0 ?? null, x1: p.x1 ?? null, y0: p.y0 ?? null, y1: p.y1 ?? null}); else o.vertices = p.vertices; return o; })}; }
+function saveLocal() { try { localStorage.setItem(LS_KEY, JSON.stringify(gatesJSON())); } catch (e) { /* storage unavailable */ } }
+function loadGates(g) {
+  if (!g || (g.format !== "vollmilch-gates" && g.format !== "cellgate-gates")) { alert("Not a vollmilch gates file"); return false; }
+  pops = (g.populations || []).map(p => ({...p, parent: p.parent || null})); return true;
+}
+function download(text, name, type) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], {type})); a.download = name.replace(/[^\w.\-]+/g, "_"); document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+
+// ------------------------------------------------------------------ UI setup
+function setAxes(x, y, lx = false, ly = false) { S.x = x; S.y = y; S.logx = lx; S.logy = ly; $("xSel").value = x; $("ySel").value = y; $("xLog").checked = lx; $("yLog").checked = ly; render(); }
+function fillFeatureSelect(sel) {
+  const groups = new Map(); for (const c of M.columns) { if (!groups.has(c.group)) groups.set(c.group, []); groups.get(c.group).push(c); }
+  sel.innerHTML = [...groups].map(([g, cs]) => `<optgroup label="${esc(g)}">${cs.map(c => `<option value="${esc(c.key)}">${esc(c.label)}</option>`).join("")}</optgroup>`).join("");
+}
+function setupUI() {
+  $("title").textContent = M.title;
+  $("hmeta").textContent = `${M.n_total.toLocaleString()} cells · ${M.samples.length} sample${M.samples.length > 1 ? "s" : ""}${M.n < M.n_total ? ` · ${M.n.toLocaleString()} loaded` : ""} · ${M.segmentation_mode} segmentation`;
+  $("helpMeta").textContent = `vollmilch ${M.version} · report ${M.report_id} · built ${M.created}`;
+  const L = cats.sample.levels; sampleOn = new Uint8Array(L.length).fill(1);
+  $("samples").innerHTML = L.map((s, k) => { const m = M.samples.find(x => x.sample === s) || {}; return `<label class="chk" title="${esc(m.region || s)} in ${esc(m.image || "")}"><input type="checkbox" data-k="${k}" checked><span class="sw" style="background:${CAT_PAL[k % CAT_PAL.length]}"></span>${esc(s)} <span class="small">${(m.n_total || 0).toLocaleString()}</span></label>`; }).join("");
+  $("samples").addEventListener("change", e => { const k = +e.target.dataset.k; sampleOn[k] = e.target.checked ? 1 : 0; afterSamples(); });
+  $("sAll").onclick = () => { sampleOn.fill(1); $("samples").querySelectorAll("input").forEach(i => i.checked = true); afterSamples(); };
+  $("sNone").onclick = () => { sampleOn.fill(0); $("samples").querySelectorAll("input").forEach(i => i.checked = false); afterSamples(); };
+  fillFeatureSelect($("xSel")); fillFeatureSelect($("ySel"));
+  $("xSel").onchange = () => setAxes($("xSel").value, S.y, $("xLog").checked, S.logy);
+  $("ySel").onchange = () => setAxes(S.x, $("ySel").value, S.logx, $("yLog").checked);
+  $("xLog").onchange = () => setAxes(S.x, S.y, $("xLog").checked, S.logy);
+  $("yLog").onchange = () => setAxes(S.x, S.y, S.logx, $("yLog").checked);
+  $("fullRange").onchange = () => { S.full = $("fullRange").checked; render(); };
+  $("bSwap").onclick = () => setAxes(S.y, S.x, S.logy, S.logx);
+  $("bSpatial").onclick = () => setAxes("x_um", "y_um");
+  const embs = []; for (const c of M.columns) if (c.group === "Embedding" && c.dim === 1) embs.push(c);
+  if (!embs.length) $("embRow").style.display = "none";
+  $("embSel").innerHTML = embs.map(c => `<option value="${esc(c.key)}">${esc(c.embedding)} · ${esc(c.variant)}</option>`).join("");
+  $("bUmap").onclick = () => { const k = $("embSel").value; setAxes(k, k.replace(/_1$/, "_2")); };
+  const colOpts = [`<optgroup label="Groups"><option value="pop">Population (deepest gate)</option>${Object.keys(cats).map(k => `<option value="cat:${esc(k)}">${esc(k)}</option>`).join("")}</optgroup>`];
+  const groups = new Map(); for (const c of M.columns) { if (!groups.has(c.group)) groups.set(c.group, []); groups.get(c.group).push(c); }
+  for (const [g, cs] of groups) colOpts.push(`<optgroup label="${esc(g)}">${cs.map(c => `<option value="num:${esc(c.key)}">${esc(c.label)}</option>`).join("")}</optgroup>`);
+  $("colSel").innerHTML = colOpts.join(""); $("colSel").value = S.colorBy;
+  $("colSel").onchange = () => { S.colorBy = $("colSel").value; computeColors(); render(); };
+  $("ptSize").oninput = () => { S.size = +$("ptSize").value; S.autoSize = false; $("ptAuto").checked = false; render(); };
+  $("ptAuto").onchange = () => { S.autoSize = $("ptAuto").checked; render(); };
+  $("ptAlpha").oninput = () => { S.alpha = +$("ptAlpha").value; $("ptAlphaV").textContent = S.alpha; render(); };
+  const modes = {mSelect: "select", mRect: "rect", mPoly: "poly"};
+  for (const [id, m] of Object.entries(modes)) $(id).onclick = () => { S.mode = m; draft = null; for (const k in modes) $(k).classList.toggle("on", k === id); drawOverlay(); };
+  $("bSave").onclick = () => download(JSON.stringify(gatesJSON(), null, 1), `${M.title}_gates.json`, "application/json");
+  $("bLoad").onclick = () => $("fLoad").click();
+  $("fLoad").onchange = async () => { const f = $("fLoad").files[0]; if (!f) return; try { if (loadGates(JSON.parse(await f.text()))) { S.parent = null; renderCrumbs(); changedGates(); } } catch (e) { alert("Could not read gates: " + e.message); } $("fLoad").value = ""; };
+  $("bClasses").onclick = () => { const rows = [["cell_id", "sample", "object_id", "population", "path"]];
+    for (let i = 0; i < N; i++) { const k = deepest[i]; rows.push([cellName(i), cats.sample.levels[cats.sample.codes[i]], objId[i], k >= 0 ? ordered[k].p.name : "", k >= 0 ? popPath(ordered[k].p) : ""]); }
+    download(rows.map(r => r.map(csvq).join(",")).join("\n"), `${M.title}_classes_viewer.csv`, "text/csv"); };
+  $("bHelp").onclick = () => { const h = $("help"); h.style.display = h.style.display === "block" ? "none" : "block"; };
+  $("statMode").onchange = renderStats; $("bStats").onclick = statsCSV;
+  $("heatBy").innerHTML = `<option value="pop">Population (deepest gate)</option>` + Object.keys(cats).filter(k => k !== "image").map(k => `<option value="cat:${esc(k)}">${esc(k)}</option>`).join("");
+  const mg = [...new Set(M.columns.filter(c => c.group.startsWith("Markers")).map(c => c.group))];
+  $("heatGrp").innerHTML = mg.map(g => `<option>${esc(g)}</option>`).join("");
+  const firstLeiden = Object.keys(cats).find(k => k.startsWith("leiden")); if (firstLeiden) $("heatBy").value = "cat:" + firstLeiden;
+  $("heatBy").onchange = renderHeat; $("heatGrp").onchange = renderHeat;
+  $("bRandom").onclick = () => { const rows = []; for (let i = 0; i < N; i++) if (visible[i]) rows.push(i); const pn = S.parent ? popById(S.parent).name : "all cells"; showCells(rows, `Random cells of ${pn}`); };
+  for (const id of ["outSel", "tileSel", "gamma"]) $(id).addEventListener("input", renderGallery);
+  $("galN").onchange = () => showCells(galleryRows, $("info").textContent);
+  window.addEventListener("resize", () => { clearTimeout(window._rt); window._rt = setTimeout(render, 120); });
+}
+function afterSamples() { computeVisible(); render(); renderTree(); renderStats(); renderHeat(); }
+
+// ------------------------------------------------------------------ main
+(async function main() {
+  try {
+    $("loadmsg").textContent = "decompressing cell table";
+    const buf = await gunzip(b64ToBytes($("blob-data").textContent.trim()));
+    for (const c of M.columns) { cols[c.key] = view(buf, M.blob["num:" + c.key]); colInfo[c.key] = c; }
+    for (const c of M.categories) cats[c.key] = {codes: view(buf, M.blob["cat:" + c.key]), levels: c.levels};
+    objId = view(buf, M.blob.object_id);
+    if (M.thumbs && M.thumb_blob) {
+      $("loadmsg").textContent = "decompressing thumbnails";
+      const tb = await gunzip(b64ToBytes($("blob-thumbs").textContent.trim()));
+      TO = view(tb, M.thumb_blob.outlines); thumbRows = view(tb, M.thumb_blob.rows);
+      const Sz = M.thumbs.size, C = M.thumbs.channels.length, P = Sz * Sz; T = new Uint8Array(M.thumbs.n * C * P);
+      const cv = document.createElement("canvas"), cx = cv.getContext("2d", {willReadFrequently: true});
+      let done = 0;
+      for (const a of M.thumbs.atlases) {
+        const e = M.thumb_blob[a.key], bytes = new Uint8Array(tb, e.offset, e.length);
+        const bmp = await createImageBitmap(new Blob([bytes], {type: a.mime}));
+        cv.width = bmp.width; cv.height = bmp.height; cx.drawImage(bmp, 0, 0); const AW = bmp.width, px = cx.getImageData(0, 0, bmp.width, bmp.height).data; if (bmp.close) bmp.close();
+        for (let j = 0; j < a.count; j++) {
+          const r0 = Math.floor(j / a.cols) * Sz, c0 = (j % a.cols) * Sz, base = ((a.start + j) * C + a.channel) * P;
+          for (let y = 0; y < Sz; y++) { let o = ((r0 + y) * AW + c0) * 4, d = base + y * Sz; for (let x = 0; x < Sz; x++, o += 4) T[d + x] = px[o]; }
+        }
+        if (++done % 8 === 0) $("loadmsg").textContent = `decoding thumbnails ${Math.round(100 * done / M.thumbs.atlases.length)}%`;
+      }
+      thumbOfRow = new Int32Array(N).fill(-1); thumbRows.forEach((r, t) => thumbOfRow[r] = t);
+    }
+    $("blob-data").textContent = ""; $("blob-thumbs").textContent = "";
+    drawOrder = new Uint32Array(N); for (let i = 0; i < N; i++) drawOrder[i] = i;
+    let seed = 12345; const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296;
+    for (let i = N - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = drawOrder[i]; drawOrder[i] = drawOrder[j]; drawOrder[j] = t; }
+    setupUI(); buildChannelUI();
+    let stored = null; try { stored = JSON.parse(localStorage.getItem(LS_KEY) || localStorage.getItem("cellgate:" + M.report_id) || "null"); } catch (e) { }  // also gates saved under the former name
+    if (stored && stored.populations && stored.populations.length) loadGates(stored); else if (M.gates) loadGates(M.gates);
+    const emb = M.columns.find(c => c.group === "Embedding" && c.dim === 1 && c.variant === "Harmony") || M.columns.find(c => c.group === "Embedding" && c.dim === 1);
+    const mk = M.columns.filter(c => c.group.startsWith("Markers"));
+    if (emb) { S.x = emb.key; S.y = emb.key.replace(/_1$/, "_2"); $("embSel").value = emb.key; }
+    else if (mk.length > 1) { S.x = mk[0].key; S.y = mk[1].key; } else { S.x = "x_um"; S.y = "y_um"; }
+    $("xSel").value = S.x; $("ySel").value = S.y;
+    computeMembership(); computeVisible(); computeColors(); renderCrumbs(); renderTree(); renderStats(); renderHeat();
+    $("loading").style.display = "none"; render();
+  } catch (e) { $("loading").innerHTML = `<div>Could not load this report.</div><div class="small">${esc(e.message)}</div><div class="small">Use a current Chrome, Edge, Firefox or Safari (16.4+).</div>`; console.error(e); }
+})();
+</script>
+</body>
+</html>

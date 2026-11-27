@@ -1,0 +1,40 @@
+# Example: Akoya PhenoCycler .qptiff with several biopsies outlined in QuPath
+project: kidney_codex
+output: vollmilch_out
+
+source:
+  type: qptiff
+  path: /data/codex/slide1.qptiff
+
+regions:
+  type: geojson
+  path: /data/codex/slide1_outlines.geojson   # QuPath annotations, one per biopsy (annotation name = sample name)
+
+samples_table: samples.csv                    # sample,patient,condition,run
+
+segmentation:
+  backend: cellpose
+  mode: cells                 # Cellpose-SAM on nuclei AND whole cells (membrane markers), matched
+  nuclear_channel: DAPI
+  cyto_channels: [NaKATP, CD45, HLA1]
+  expand_um: 3
+  tile_px: 2048
+  overlap_px: 160
+
+features:
+  exclude: [Blank]
+  compartments: [nucleus, cell, cytoplasm]
+  stats: [mean]
+
+transform:
+  cofactor: 5
+  cofactors: {CD3: 20, CD68: 50}
+
+embedding:
+  exclude: [DAPI]
+  batch_key: run             # Harmony across acquisition runs (column of samples.csv)
+
+thumbnails:
+  channels: [DAPI, CD3, CD68, CD20, PanCK]
+  size_um: 20
+  max_per_sample: 3000

@@ -1,0 +1,35 @@
+# macOS / editors / tools
+.DS_Store
+.claude/
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# vollmilch outputs (may contain data derived from tissue images)
+vollmilch_out/
+demo_out/
+*_gates.json
+report*.html
+
+# input data: never commit images, masks or sample tables
+data/
+synthetic/
+*.qptiff
+*.ome.tif
+*.ome.tiff
+*.svs
+*.ndpi
+*.czi
+*.geojson
+samples.csv

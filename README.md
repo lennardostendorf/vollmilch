@@ -1,0 +1,151 @@
+<p align="center"><img src="docs/vollmilch_banner.png" alt="Vollmilch" width="520"></p>
+
+# Vollmilch
+
+Segmentation, per-cell features and interactive gating for multiplex histology, with a round trip to QuPath.
+
+![Vollmilch workflow](docs/vollmilch_workflow.png)
+
+The report is a single HTML file with no server and no internet connection needed, so it can be emailed or put on a shared drive. Gates are kept in the browser and saved as a small JSON file that anyone can load into the same report or apply with `vollmilch export`.
+
+## Install
+
+Use **Python 3.11 or 3.12**. Newer Python versions often lack prebuilt packages for parts of the stack (h5py, torch, scikit-image), so pip tries to compile them and fails.
+
+With conda/mamba, from this folder:
+
+```bash
+mamba env create -f environment.yml      # Python 3.12 + vollmilch[all], editable
+mamba activate vollmilch
+```
+
+or manually:
+
+```bash
+mamba create -n vollmilch python=3.12 -y && mamba activate vollmilch
+pip install -e ".[all]"                  # or: pip install "vollmilch[all] @ git+https://github.com/lennardostendorf/vollmilch"
+```
+
+Extras: `segment` (Cellpose ≥ 4, i.e. Cellpose-SAM), `embed` (scanpy, harmonypy, leidenalg). Without Cellpose, `segmentation.backend: watershed` gives a classical nuclear segmentation for quick tests. The Cellpose-SAM weights are downloaded by Cellpose on first use. GPU is used automatically (CUDA, or MPS on Apple Silicon).
+
+## Quick start
+
+```bash
+vollmilch init --type qptiff -o config.yaml     # or --type png_folder / ome_tiff; edit the file
+vollmilch inspect config.yaml                   # channels, pixel size, samples; checks channel names
+vollmilch segment config.yaml                   # resumable; --samples A,B  --force  --reuse-segmentation
+vollmilch embed config.yaml
+vollmilch report config.yaml                    # -> vollmilch_out/report.html
+# gate in the browser, click "Save gates"
+vollmilch export config.yaml report_gates.json  # -> vollmilch_out/export/report_gates/
+```
+
+`vollmilch run config.yaml` does segment + embed + report in one go.
+
+To try it without data: `python tests/make_synthetic.py data && vollmilch run examples/demo_synthetic.yaml`.
+
+## Inputs
+
+| `source.type` | what | channel names | pixel size |
+|---|---|---|---|
+| `qptiff` | Akoya / PerkinElmer `.qptiff` | `<Biomarker>` / `<Name>` of each page | TIFF resolution tags |
+| `png_folder` | one image per channel (`.png`, also `.tif`); one folder = one image, or a folder of such folders | file name (`channel_name_regex` strips prefixes like `01_`) | **`pixel_size_um` required** |
+| `ome_tiff` | one `.ome.tif` or a folder of them | OME `Channel Name` | OME `PhysicalSizeX` |
+
+Large files are read lazily, one channel and one region at a time.
+
+For PNG sources, vollmilch writes `vollmilch_out/images/<image>.ome.tif` (all channels, named, with pixel size). Open that in QuPath so the exported cells line up.
+
+**Regions** (each region becomes a sample):
+- `geojson`: QuPath annotations (select them, *File ▸ Export objects as GeoJSON*). The sample name is the annotation name, falling back to its class. With several images, put `{image}` in the path.
+- `label_image`: a mask image of the same size; every non-zero label is a region.
+- `none`: whole images.
+
+Cells are kept if their centroid lies inside the region. Pixels outside the region are blanked before segmentation, so neighbouring biopsies don't leak in.
+
+`samples_table` (CSV with a `sample` column plus e.g. `patient`, `condition`, `run`) adds colour-by options and the Harmony batch key.
+
+## Segmentation
+
+| `segmentation.mode` | objects | compartments |
+|---|---|---|
+| `nuclei` | Cellpose-SAM on the nuclear channel | nucleus |
+| `expand` | nuclei + a ring of `expand_um` (like QuPath cell expansion) | nucleus, cell, cytoplasm |
+| `cells` | nuclei **and** whole cells (Cellpose-SAM on `cyto_channels` + nuclear channel), matched by overlap. Unmatched nuclei become expanded cells (`keep_unmatched_nuclei`). | nucleus, cell, cytoplasm |
+
+Regions are normalised once (percentiles over the whole region) and segmented in `tile_px` windows with `overlap_px` overlap. Each object comes from the window whose core contains its centroid, so no object is cut at a seam. `overlap_px` must be larger than the biggest cell diameter in pixels. Check `vollmilch_out/qc/<sample>_segmentation.png` (nuclei cyan, cells magenta).
+
+## Features (`samples/<sample>/cells.parquet`)
+
+- `<marker>:<compartment>:<stat>`: raw intensity (stats `mean`, `max`, `p90`, `sd`) in `nucleus`, `cell`, `cytoplasm`
+- `nucleus:*`: area, perimeter, circularity, eccentricity, solidity, axes, aspect ratio; DAPI integrated intensity, CV, gradient, local SD, bright-chromatin fraction
+- `cell:*`: the same shape features, plus nucleus/cell area ratio
+- `x_px, y_px` (image pixels) and `x_um, y_um`
+
+Tables are Parquet (`arrow::read_parquet()` in R). The viewer and the embedding use `asinh(value / cofactor)`, with per-marker cofactors in `transform.cofactors`.
+
+## Embedding
+
+`vollmilch embed` z-scores the chosen markers (optionally plus morphology), runs PCA, then neighbours → UMAP → Leiden twice: on the PCA and on the Harmony-corrected PCA (`embedding.batch_key`: `sample` or any `samples_table` column). Above `max_cells`, UMAP runs on a random subset and Leiden labels are transferred to all cells by kNN.
+
+Re-embed a gated population (e.g. only immune cells, with immune markers):
+
+```bash
+vollmilch embed config.yaml --gates gates.json --population Immune --markers CD3,CD4,CD8,CD20,CD68 --report
+```
+
+Every embedding appears in the viewer's UMAP menu ("Immune · Harmony", …) and as `leiden <name>` colour/heatmap options.
+
+## Viewer
+
+- **Plot** any two features (markers, morphology, UMAPs, position), with optional log axes. Colour by sample, metadata, Leiden, population or any feature. Dot size follows the number of plotted cells (*auto*) or is set by hand, 0.5–16 px. *Spatial* shows x/y in µm in QuPath orientation.
+- **Gates**: rectangle (edges dragged onto the plot border are open-ended) or polygon. A new gate is a child of the population being shown. Click a population to show it and gate further inside it (hierarchy, breadcrumb navigation). Gates on UMAP axes only include cells that are part of that embedding.
+- **Cell panel**: hovering over a dot shows that cell's thumbnail, population, the plotted values and the thumbnail-channel intensities in the right panel. *Snap to cells with thumbnails* (on by default) picks the nearest cell that has a stored thumbnail. Hovering a gallery tile does the same.
+- **Cells**: click a point, drag a box, or take random cells of the shown population. The thumbnails show any number of channels, each with its own colour and black/white points, plus nucleus and cell outlines of the centred object.
+- **Tables**: counts and % of parent / % of all per sample (CSV), and mean expression per population or Leiden cluster.
+- **Save gates** downloads the JSON. Gates also persist in the browser's storage for that report. *Load gates* applies a JSON from a colleague. `vollmilch report --gates g.json` builds a report that opens with those gates.
+
+Each sample is capped at `report.max_cells_per_sample` cells (random subset, cells with thumbnails first). The viewer's percentages are then estimates; `vollmilch export` always uses every cell.
+
+## Back to QuPath
+
+`vollmilch export config.yaml gates.json` writes, per gates file:
+- `<image>_cells.geojson`: one QuPath *cell* per object (cell outline + `nucleusGeometry`; *detections* in nuclei mode). Each has its name (= `cell_id`), a classification (deepest population, in the gate colour), raw marker measurements and `Gate: <name>` 0/1 columns. Drag it onto the image in QuPath (or *File ▸ Import objects*). Options: `--only <population>`, `--measurements none|markers|all`, `--full-path` (class `Parent: Child`, i.e. QuPath derived classes).
+- `classes.csv` (cell_id, population, path, x/y px, gate flags) and `population_counts.csv` (per sample: count, parent count, % parent, % total).
+
+Population assignment in the export uses the same arithmetic as the viewer. On the test data both agree cell by cell. To re-classify cells already in QuPath after changing gates, run `qupath/import_classes.groovy` with the new `classes.csv`.
+
+## Output layout
+
+```
+vollmilch_out/
+  samples/<sample>/  cells.parquet  nuclei_labels.tif  cell_labels.tif  thumbs.npz  meta.json
+  embeddings/<name>.parquet|json
+  qc/<sample>_segmentation.png
+  images/<image>.ome.tif        (PNG sources)
+  report.html
+  export/<gates>/  <image>_cells.geojson  classes.csv  population_counts.csv
+  vollmilch.log
+```
+
+## Practical notes
+
+- **Report size** is mostly thumbnails (JPEG atlases, roughly 0.5–1 kB per cell and channel). Tune `thumbnails.max_per_sample`, `thumbnails.size_um` and `report.max_thumbnails_total`. After changing thumbnail channels, run `vollmilch segment --reuse-segmentation` (keeps the masks).
+- **Memory**: a region is held as two label images plus one channel; all reductions stream over row blocks. Measured: a 6,000 × 10,400 px region with 80k cells and 8 channels peaked at 1.4 GB and took 30 s for features with the defaults (`mean`; nucleus + cell). The `max`/`p90` statistics and the cytoplasm compartment raised this to 2.5 GB and 95 s. A 20k × 20k px biopsy needs roughly 5–7 GB with the defaults.
+- **Cellpose-SAM** needs no diameter; set `diameter_um` only if objects come out systematically too small or too large. For `cells` mode, choose membrane/cytoplasm markers that outline most cells (Na/K-ATPase, CD45, HLA class I, pan-cytokeratin).
+- Runs are reproducible (`embedding.seed`; random subsets are seeded per sample).
+
+## Tests
+
+```bash
+pytest tests/        # tiling seams, nucleus–cell matching, gate geometry and hierarchy
+```
+
+## Logo
+
+`docs/make_workflow.py` draws the workflow diagram (`docs/vollmilch_workflow.svg` / `.png`). `docs/make_logo.py` draws the pixel-art glass of milk (`docs/vollmilch_logo.svg`, PNGs at 128–512 px, and the banner). The report shows it in its header and as the browser-tab icon.
+
+
+## License
+
+MIT

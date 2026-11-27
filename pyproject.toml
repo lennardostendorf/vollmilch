@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vollmilch"
+version = "0.1.0"
+description = "Multiplex histology: Cellpose-SAM segmentation, per-cell features, interactive HTML gating and QuPath round trip"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "scikit-image>=0.21",
+    "tifffile>=2023.7.10",
+    "imagecodecs",
+    "zarr>=2.16",
+    "pandas>=2.0",
+    "pyarrow>=12",
+    "pyyaml>=6",
+    "shapely>=2.0",
+    "pillow>=9",
+    "opencv-python-headless>=4.7",
+]
+
+[project.optional-dependencies]
+segment = ["cellpose>=4.0"]
+embed = ["scanpy>=1.10", "anndata>=0.10", "harmonypy>=0.0.10", "leidenalg", "igraph", "scikit-learn"]
+all = ["cellpose>=4.0", "scanpy>=1.10", "anndata>=0.10", "harmonypy>=0.0.10", "leidenalg", "igraph", "scikit-learn"]
+test = ["pytest"]
+
+[project.scripts]
+vollmilch = "vollmilch.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vollmilch"]

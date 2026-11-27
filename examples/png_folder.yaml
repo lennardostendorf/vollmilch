@@ -1,0 +1,28 @@
+# Example: small multiplex FOVs delivered as one PNG per channel
+#   fovs/
+#     FOV01/  01_DAPI.png 02_CD3.png 03_CD20.png ...
+#     FOV02/  ...
+project: fov_panel
+output: vollmilch_out
+
+source:
+  type: png_folder
+  path: /data/fovs
+  pixel_size_um: 0.39
+  channel_name_regex: '^(?:\d+_)?(.+)$'    # strip the "01_" prefix; marker = rest of the file name
+
+regions:
+  type: none                 # whole FOVs; or label_image / geojson with {image} in the path
+
+segmentation:
+  backend: cellpose
+  mode: nuclei               # nuclear segmentation only; markers measured inside nuclei
+  nuclear_channel: DAPI
+  tile_px: 2048
+
+embedding:
+  batch_key: sample
+
+thumbnails:
+  channels: [DAPI, CD3, CD20, Ki67]
+  size_um: 16

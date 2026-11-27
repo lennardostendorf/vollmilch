@@ -1,0 +1,10 @@
+# mamba env create -f environment.yml && mamba activate vollmilch
+# Python 3.12: prebuilt packages exist for the whole stack (torch, h5py, scikit-image, ...)
+name: vollmilch
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - -e .[all]

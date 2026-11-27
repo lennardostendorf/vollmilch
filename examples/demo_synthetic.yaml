@@ -1,0 +1,95 @@
+# vollmilch configuration
+# Relative paths are resolved relative to this file.
+# Check the source and regions first with:  vollmilch inspect config.yaml
+
+project: vollmilch demo (synthetic)
+output: ../demo_out            # all results go here
+
+# ---------------------------------------------------------------- image source
+source:
+  type: qptiff                  # qptiff | png_folder | ome_tiff
+  path: ../data/slide.qptiff
+  # png_folder: path is either ONE folder with one PNG per channel (file name = marker
+  # name) or a folder of such folders (each subfolder = one image/sample).
+  # pixel_size_um: 0.5          # required for png_folder; overrides file metadata otherwise
+  # channel_name_regex: '^(?:\d+_)?(.+)$'   # png_folder: first group = marker name
+  # channel_names: [DAPI, CD3, ...]         # override names from the file (same order)
+
+# ---------------------------------------------------------------- regions / samples
+# Which part of each image to analyse. Each region becomes one sample.
+regions:
+  type: geojson                 # geojson | label_image | none
+  path: ../data/outlines.geojson        # QuPath: select annotations > File > Export objects as GeoJSON
+  # For several images, use {image} in the path, e.g. masks/{image}.geojson or masks/{image}_mask.png
+  name_property: name           # annotation name; falls back to classification, then region_<n>
+  # include: [B1, B2]           # only these region names
+  # Regions without a file (png_folder images without a mask) are analysed as a whole.
+
+# Optional table with one row per sample (column 'sample' plus anything else, e.g. batch,
+# patient, condition). Columns become colour-by options and can be the Harmony batch key.
+samples_table: ../data/samples.csv
+
+# ---------------------------------------------------------------- segmentation
+segmentation:
+  backend: watershed            # cellpose (Cellpose-SAM) | watershed (classical fallback, nuclei only)
+  mode: expand                  # nuclei : nuclei only (cell = nucleus)
+                                # expand : nuclei + ring of expand_um (like QuPath cell expansion)
+                                # cells  : nuclei AND whole cells with Cellpose-SAM, matched
+  nuclear_channel: DAPI
+  cyto_channels: []             # mode=cells: membrane/cytoplasm markers combined into one channel
+  cyto_combine: max             # max | mean (after per-channel normalisation)
+  expand_um: 3.0                # mode=expand; also for unmatched nuclei in mode=cells
+  keep_unmatched_nuclei: true   # mode=cells: nuclei without a segmented cell become expanded cells
+  require_nucleus: false        # mode=cells: drop cells without a nucleus
+  model: null                   # Cellpose model name or path; null = Cellpose default (Cellpose-SAM)
+  gpu: auto                     # auto | true | false   (CUDA or Apple MPS)
+  diameter_um: null             # null = let Cellpose-SAM decide (it is size-invariant)
+  flow_threshold: 0.4
+  cellprob_threshold: 0.0
+  batch_size: 8
+  min_nucleus_area_um2: 8
+  min_cell_area_um2: 15
+  normalize_percentiles: [1, 99.8]   # per channel, computed over the whole region
+  tile_px: 2048                 # region is segmented in overlapping windows
+  overlap_px: 160               # must exceed the largest cell diameter in pixels
+
+# ---------------------------------------------------------------- features
+features:
+  channels: all                 # all | [list of markers]
+  exclude: []                   # e.g. [Blank, Empty, Autofluorescence]
+  compartments: [nucleus, cell, cytoplasm] # any of nucleus, cell, cytoplasm (cytoplasm = cell minus nucleus)
+  stats: [mean, p90]            # any of mean, max, p90, sd
+  nuclear_texture: true         # DAPI texture/heterogeneity per nucleus
+
+# Display transform for markers: asinh(value / cofactor)
+transform:
+  cofactor: 5
+  cofactors: {}                 # per-marker overrides, e.g. {CD3: 20, CD68: 50}
+
+# ---------------------------------------------------------------- embedding
+embedding:
+  markers: all                  # all | [list]  (uses the feature channels minus exclude)
+  exclude: []                   # e.g. [DAPI]
+  compartment: cell
+  stat: mean
+  include_morphology: false     # add nuclear/cell shape features
+  batch_key: batch              # Harmony batch column (sample or a samples_table column); null = no Harmony
+  n_pcs: 20
+  n_neighbors: 15
+  leiden_resolution: 1.0
+  max_cells: 200000             # UMAP on a random subset; Leiden labels transferred to all cells
+  seed: 0
+
+# ---------------------------------------------------------------- thumbnails
+thumbnails:
+  channels: [DAPI, CD3, CD68, PanCK]   # channels stored for the cell gallery (any number)
+  colors: []                    # optional, same order; default palette otherwise
+  size_um: 24
+  max_per_sample: 5000
+
+# ---------------------------------------------------------------- report
+report:
+  title: null
+  max_cells_per_sample: 150000  # cells plotted in the viewer (gating export applies to all cells)
+  compartments: [cell, nucleus] # marker compartments offered in the viewer
+  stats: [mean]
