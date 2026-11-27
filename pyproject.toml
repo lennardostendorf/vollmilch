@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vollmilch"
-version = "0.1.0"
+dynamic = ["version"]  # from src/vollmilch/__init__.py
 description = "Multiplex histology: Cellpose-SAM segmentation, per-cell features, interactive HTML gating and QuPath round trip"
 readme = "README.md"
 license = { text = "MIT" }
@@ -32,6 +32,9 @@ test = ["pytest"]
 
 [project.scripts]
 vollmilch = "vollmilch.cli:main"
+
+[tool.hatch.version]
+path = "src/vollmilch/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vollmilch"]
