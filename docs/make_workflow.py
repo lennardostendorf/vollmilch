@@ -21,8 +21,8 @@ STAGES = [
          lines=["UMAP", "Leiden clustering", "Harmony integration"]),
     dict(title="Report & gate", cmd="vollmilch report", color="#c2832b", tint="#fbf4ea",
          lines=["Interactive HTML report", "Gating", "Gates export"]),
-    dict(title="Export", cmd="vollmilch export", color="#4f8a3c", tint="#eff7ec",
-         lines=["Populations to QuPath"]),
+    dict(title="Export", cmd="vollmilch export · to_seurat", color="#4f8a3c", tint="#eff7ec",
+         lines=["Populations to QuPath", "Seurat object (R)"]),
 ]
 
 M, GAP = 36, 40

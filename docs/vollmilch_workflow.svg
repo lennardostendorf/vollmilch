@@ -41,6 +41,7 @@
 <g filter="url(#sh)"><rect x="1194.4" y="138" width="249.6" height="196" rx="12" fill="#eff7ec" stroke="#4f8a3c" stroke-width="1.5"/></g>
 <path d="M1194.4,150 a12,12 0 0 1 12,-12 h225.6 a12,12 0 0 1 12,12 v46 h-249.6 z" fill="#4f8a3c"/>
 <text x="1210.4" y="163.0" font-size="17" font-weight="700" fill="#ffffff" text-anchor="start" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" >5  Export</text>
-<text x="1210.4" y="183.0" font-size="12.5" font-weight="500" fill="#ffffff" text-anchor="start" font-family="'JetBrains Mono', Menlo, Consolas, monospace" opacity="0.92">vollmilch export</text>
-<text x="1319.2" y="271.0" font-size="16" font-weight="500" fill="#1f2a3a" text-anchor="middle" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" >Populations to QuPath</text>
+<text x="1210.4" y="183.0" font-size="12.5" font-weight="500" fill="#ffffff" text-anchor="start" font-family="'JetBrains Mono', Menlo, Consolas, monospace" opacity="0.92">vollmilch export · to_seurat</text>
+<text x="1319.2" y="257.5" font-size="16" font-weight="500" fill="#1f2a3a" text-anchor="middle" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" >Populations to QuPath</text>
+<text x="1319.2" y="284.5" font-size="16" font-weight="500" fill="#1f2a3a" text-anchor="middle" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" >Seurat object (R)</text>
 </svg>
